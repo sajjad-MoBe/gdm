@@ -14,7 +14,7 @@ func main() {
 	defer database.Close()
 
 	app := tui.NewApp()
-	if err := app.Run(); err != nil {
+	if _, err := app.Run(); err != nil {
 		log.Fatalf("Failed to start the app: %v", err)
 	}
 }
