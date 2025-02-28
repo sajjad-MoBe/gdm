@@ -1,110 +1,90 @@
 package tui
 
 import (
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
+	"fmt"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
+type Download struct {
+	URL      string
+	Queue    string
+	Status   string
+	Speed    string
+	Progress string
+}
+
 type App struct {
-	app       *tview.Application
-	pages     *tview.Pages
-	tabBar    *tview.Flex
-	addForm   *tview.Form
-	downloads *tview.Table
-	queues    *tview.Table
-	helpBar   *tview.TextView
+	downloads   []Download
+	currentPage string
 }
 
 func NewApp() *App {
-	a := &App{
-		app:       tview.NewApplication(),
-		pages:     tview.NewPages(),
-		addForm:   tview.NewForm(),
-		downloads: tview.NewTable(),
-		queues:    tview.NewTable(),
-		helpBar:   tview.NewTextView(),
-	}
-
-	a.setupUI()
-	return a
-}
-
-func (a *App) setupUI() {
-	a.helpBar.SetText("F1:Add F2:Downloads F3:Queues A:AddDownload D:Delete E:Edit")
-	a.helpBar.SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
-
-	a.setupAddTab()
-	a.setupDownloadsTab()
-	a.setupQueuesTab()
-
-	a.tabBar = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(a.pages, 0, 1, true).
-		AddItem(a.helpBar, 1, 1, false)
-
-	a.pages.AddPage("Add Download", a.addForm, true, true)
-	a.pages.AddPage("Downloads List", a.downloads, true, false)
-	a.pages.AddPage("Queues List", a.queues, true, false)
-
-	a.setupKeyBindings()
-}
-
-func (a *App) setupAddTab() {
-	a.addForm.
-		AddInputField("URL", "", 50, nil, nil).
-		AddInputField("Output Name", "", 50, nil, nil).
-		AddButton("OK", func() {
-			// Handle adding a download (To be implemented)
-		}).
-		AddButton("Cancel", func() {
-			a.switchToTab("Downloads List")
-		})
-}
-
-func (a *App) setupDownloadsTab() {
-	a.downloads.SetBorders(true).SetTitle("Downloads").SetTitleAlign(tview.AlignLeft)
-
-	headers := []string{"URL", "Queue", "Status", "Speed", "Progress"}
-	for i, h := range headers {
-		a.downloads.SetCell(0, i, tview.NewTableCell(h).SetTextColor(tcell.ColorGhostWhite).SetSelectable(false))
+	return &App{
+		downloads: []Download{},
 	}
 }
 
-func (a *App) setupQueuesTab() {
-	a.queues.SetBorders(true).SetTitle("Queues").SetTitleAlign(tview.AlignLeft)
-
-	headers := []string{"Queue Name", "Folder", "Max Downloads", "Speed Limit", "Schedule"}
-	for i, h := range headers {
-		a.queues.SetCell(0, i, tview.NewTableCell(h).SetTextColor(tcell.ColorGhostWhite).SetSelectable(false))
-	}
+func (a *App) Init() tea.Cmd {
+	return nil
 }
 
-func (a *App) setupKeyBindings() {
-	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyF1:
-			a.switchToTab("Add Download")
-		case tcell.KeyF2:
-			a.switchToTab("Downloads List")
-		case tcell.KeyF3:
-			a.switchToTab("Queues List")
-		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'a':
-				a.switchToTab("Add Download")
-			case 'd':
-				// Handle delete action
-			case 'e':
-				// Handle edit action
-			}
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "f1":
+			a.currentPage = "Add Download"
+		case "f2":
+			a.currentPage = "Downloads List"
+		case "f3":
+			a.currentPage = "Queues List"
+		case "a":
+			// Switch to Add Download page
+			a.currentPage = "Add Download"
+		case "d":
+			// Handle delete action
+		case "e":
+			// Handle edit action
 		}
-		return event
-	})
+	}
+
+	return a, nil
 }
 
-func (a *App) switchToTab(tabName string) {
-	a.pages.SwitchToPage(tabName)
+func (a *App) View() string {
+	var output string
+	switch a.currentPage {
+	case "Add Download":
+		output = a.renderAddDownloadPage()
+	case "Downloads List":
+		output = a.renderDownloadsListPage()
+	case "Queues List":
+		output = a.renderQueuesListPage()
+	}
+
+	return output + "\nF1: Add Download | F2: Downloads List | F3: Queues List"
+}
+
+func (a *App) renderAddDownloadPage() string {
+	return "Add Download Page\nEnter the URL and Output Name."
+}
+
+func (a *App) renderDownloadsListPage() string {
+	var downloadsList string
+	for _, d := range a.downloads {
+		downloadsList += fmt.Sprintf("URL: %s | Queue: %s | Status: %s | Speed: %s | Progress: %s\n",
+			d.URL, d.Queue, d.Status, d.Speed, d.Progress)
+	}
+	return "Downloads List:\n" + downloadsList
+}
+
+func (a *App) renderQueuesListPage() string {
+	// This can be customized with your own queue logic
+	return "Queues List:\nNo queues available."
 }
 
 func (a *App) Run() error {
-	return a.app.SetRoot(a.tabBar, true).Run()
+	p := tea.NewProgram(a)
+	return p.Start()
 }
