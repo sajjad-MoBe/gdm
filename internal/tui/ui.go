@@ -84,7 +84,7 @@ func (a *App) renderQueuesListPage() string {
 	return "Queues List:\nNo queues available."
 }
 
-func (a *App) Run() error {
+func (a *App) Run() (tea.Model, error) {
 	p := tea.NewProgram(a)
-	return p.Start()
+	return p.Run() // Run returns both tea.Model and error
 }
