@@ -1,16 +1,17 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-var database *sql.DB
+var database *gorm.DB
 
 func Initialize() {
 	configDir, err := os.UserConfigDir()
@@ -25,50 +26,45 @@ func Initialize() {
 
 	dbPath := filepath.Join(appConfigDir, "database.db")
 	fmt.Println("Database path:", dbPath)
+	db := sqlite.Open(dbPath)
 
-	database, err = sql.Open("sqlite3", dbPath)
+	database, err := gorm.Open(db, &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to open database:", err)
+		return
 	}
-
-	createTables()
-
-	// handleShutdown()
-}
-
-func createTables() {
-	query := `
-	
-	`
-	_, err := database.Exec(query)
+	err = database.AutoMigrate(&Queue{}, &Download{})
 	if err != nil {
-		log.Fatal("Failed to create tables:", err)
+		log.Fatal("Failed to migrate database:", err)
 	}
-}
 
-func GetDB() *sql.DB {
-	return database
 }
 
 func Close() {
-	if database != nil {
-		err := database.Close()
-		if err != nil {
-			log.Println("Error closing database:", err)
-		} else {
-			fmt.Println("Database connection closed.")
-		}
+	sqlDB, err := database.DB()
+	if err != nil {
+		log.Fatal(err)
 	}
+	sqlDB.Close()
 }
 
-// func handleShutdown() {
-// 	sigChan := make(chan os.Signal, 1)
-// 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+func GetDB() *gorm.DB {
+	return database
+}
+func SetCustomDB(db *gorm.DB) {
+	database = db
+}
 
-// 	go func() {
-// 		<-sigChan
-// 		fmt.Println("\nclosing app...")
-// 		Close()
-// 		os.Exit(0)
-// 	}()
-// }
+func ResetAll(tempDir string) error {
+	return filepath.Walk(tempDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			if err := os.Remove(path); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
