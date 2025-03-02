@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/sajjad-mobe/gdm/internal/db"
@@ -11,7 +12,8 @@ func main() {
 	db.Initialize()
 
 	database := db.GetDB()
-	defer database.Close()
+	fmt.Println(database)
+	defer db.Close()
 
 	app := tui.NewApp()
 	if _, err := app.Run(); err != nil {
