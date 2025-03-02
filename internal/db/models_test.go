@@ -17,7 +17,7 @@ func TestCreateAndGetObject(t *testing.T) {
 	}
 
 	// Migrate the schema
-	if err := db.AutoMigrate(&Queue{}, &Download{}); err != nil {
+	if err := db.AutoMigrate(&Queue{}, &Download{}, &Worker{}); err != nil {
 		t.Fatalf("failed to migrate database: %v", err)
 	}
 	SetCustomDB(db)
@@ -112,4 +112,24 @@ func TestCreateAndGetObject(t *testing.T) {
 	if downloads[0].Retries != savedDownload.Retries {
 		t.Errorf("Expected Retries %d, got %d", downloads[0].Retries, savedDownload.Retries)
 	}
+
+	worker := Worker{
+		DownloadID:     download.ID,
+		TempPath:       "/tmp/downloads/file.tmp",
+		SizeRangeStart: 0,
+		SizeRangeEnd:   1024 * 1024, // Example range: 0 to 1MB
+	}
+	if err := Create(&worker); err != nil {
+		log.Fatalf("Failed to create worker: %v", err)
+	}
+
+	// Verify the Worker was saved correctly
+	workers, err := GetWorkerBy("id", worker.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve worker: %v", err)
+	}
+	for _, p := range workers {
+		fmt.Printf("Worker: %+v\n", p)
+	}
+
 }

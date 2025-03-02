@@ -20,6 +20,16 @@ type Download struct {
 	Queue Queue `gorm:"foreignKey:QueueID"`
 }
 
+type Worker struct {
+	ID             uint   `gorm:"primaryKey" json:"id"`
+	DownloadID     uint   `gorm:"not null" json:"download_id"`
+	TempPath       string `json:"temp_path"`
+	SizeRangeStart int64  `json:"size_range_start"`
+	SizeRangeEnd   int64  `json:"size_range_end"`
+
+	Download Download `gorm:"foreignKey:DownloadID"`
+}
+
 func Create(model interface{}) error {
 	return GetDB().Create(model).Error
 }
@@ -41,6 +51,14 @@ func GetDownloadBy(field string, value interface{}) ([]Download, error) {
 		return nil, err
 	}
 	return downloads, nil
+}
+
+func GetWorkerBy(field string, value interface{}) ([]Worker, error) {
+	var workers []Worker
+	if err := GetDB().Preload("Download.Queue").Where(field+"= ?", value).Find(&workers).Error; err != nil {
+		return nil, err
+	}
+	return workers, nil
 }
 
 func Save(model interface{}) error {

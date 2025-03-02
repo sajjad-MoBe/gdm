@@ -33,7 +33,7 @@ func Initialize() {
 		log.Fatal("Failed to open database:", err)
 		return
 	}
-	err = database.AutoMigrate(&Queue{}, &Download{})
+	err = database.AutoMigrate(&Queue{}, &Download{}, &Worker{})
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
 	}
