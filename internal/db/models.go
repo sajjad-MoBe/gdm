@@ -21,13 +21,14 @@ type Download struct {
 }
 
 type Worker struct {
-	ID             uint   `gorm:"primaryKey" json:"id"`
-	DownloadID     uint   `gorm:"not null" json:"download_id"`
-	TempPath       string `json:"temp_path"`
-	SizeRangeStart int64  `json:"size_range_start"`
-	SizeRangeEnd   int64  `json:"size_range_end"`
-
-	Download Download `gorm:"foreignKey:DownloadID"`
+	ID             uint     `gorm:"primaryKey" json:"id"`
+	DownloadID     uint     `gorm:"not null" json:"download_id"`
+	Index          int64    `json:"index"`
+	TempPath       string   `json:"temp_path"`
+	SizeRangeStart int64    `json:"size_range_start"`
+	SizeRangeEnd   int64    `json:"size_range_end"`
+	Status         int64    `json:"status"`
+	Download       Download `gorm:"foreignKey:DownloadID"`
 }
 
 func Create(model interface{}) error {
