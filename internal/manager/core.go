@@ -201,7 +201,8 @@ func (dm *DownloadManager) startDownload(download *Download, tokenBucket chan st
 		}
 		if IsDone {
 			download.Status = "finished"
-			fmt.Println(download.URL, "finished")
+			// fmt.Println(download.URL, "finished")
+			mergeParts(download)
 		}
 		if IsPaused {
 			download.Status = "paused"
@@ -263,6 +264,46 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 		}
 		if err != nil {
 			partDownloader.IsFailed = true
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mergeParts(download *Download) error {
+	if err := os.MkdirAll(download.Queue.SaveDir, os.ModePerm); err != nil {
+		return err
+	}
+	fullPath := filepath.Join(download.Queue.SaveDir, download.OutputFile)
+	counter := 1
+	for {
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			break
+		}
+		newFilename := fmt.Sprintf("%s(%d)%s",
+			download.OutputFile[:len(download.OutputFile)-len(filepath.Ext(download.OutputFile))],
+			counter, filepath.Ext(download.OutputFile),
+		)
+		fullPath = filepath.Join(download.Queue.SaveDir, newFilename)
+		counter++
+	}
+	outFile, err := os.Create(fullPath)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	for _, p := range download.PartDownloaders {
+		partFile, err := os.Open(p.TempFile)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(p.TempFile)
+		defer partFile.Close()
+
+		_, err = io.Copy(outFile, partFile)
+		if err != nil {
 			return err
 		}
 	}
