@@ -281,10 +281,12 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 		}
 		if err != nil {
 			download.Retries++
+
 			if download.Retries > download.Queue.MaxRetries {
 				partDownloader.IsFailed = true
 				return err
 			}
+			time.Sleep(2 * time.Second)
 		}
 		if download.Retries > download.Queue.MaxRetries {
 			return nil
