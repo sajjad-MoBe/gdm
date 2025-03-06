@@ -74,7 +74,7 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 					// queueMutex.Unlock()
 					var StartWG sync.WaitGroup
 					StartWG.Add(len(download.PartDownloaders))
-					dm.startDownload(download, tokenBucket, &StartWG)
+					// dm.startDownload(download, tokenBucket, &StartWG)
 					StartWG.Wait()
 
 				}
