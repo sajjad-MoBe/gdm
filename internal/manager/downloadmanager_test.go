@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"testing"
@@ -63,27 +64,38 @@ func TestDownloadManager(t *testing.T) {
 	downloadManager.AddQueue(&queue1)
 	downloadManager.AddQueue(&queue2)
 
-	// downloadManager.AddDownload(&download1)
+	downloadManager.AddDownload(&download1)
 	downloadManager.AddDownload(&download3)
-	// downloadManager.AddDownload(&download2)
+	downloadManager.AddDownload(&download2)
 	_, _ = download1, download2
 
 	time.Sleep(time.Second * 2)
 	downloadManager.PauseDownload(&download1)
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 2)
 	downloadManager.ResumeDownload(&download1)
-	queue1.SetBandwith(10)
-	time.Sleep(time.Second * 10)
+	queue1.SetBandwith(100)
+	time.Sleep(time.Second * 2)
 
 	for {
 		ended := true
 		for _, queue := range downloadManager.Queues {
 			for _, download := range queue.Downloads {
+				totalKB := 0
+				for _, p := range download.PartDownloaders {
+					// progress := float64(p.Downloaded) / float64(p.End-p.Start+1) * 100
+					// fmt.Printf(
+					// 	"Part %d: %.2f%% (%d/%d bytes) Speed: %d KB/s\n",
+					// 	p.Index+1, progress, p.Downloaded, p.End-p.Start+1, p.Speed/1024,
+					// ) // uncooment if you want use
+					totalKB += int(p.Speed / 1024)
+				}
+				fmt.Printf("Speed for %s: %d KB/s\n", download.OutputFile, totalKB)
+
 				if download.Status == "initializing" ||
 					download.Status == "pending" ||
 					download.Status == "downloading" {
 					ended = false
-					time.Sleep(5 * time.Second)
+					time.Sleep(3 * time.Second)
 					break
 				}
 			}
