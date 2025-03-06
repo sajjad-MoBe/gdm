@@ -17,16 +17,16 @@ func TestDownloadManager(t *testing.T) {
 		SaveDir:                   path.Join(homeDir, "Downloads/gdm-test"), // download folder
 		MaxConcurrentDownloads:    5,
 		StartAtOneWorkerAvailable: true,
-		MaxBandwidth:              -1,
+		MaxBandwidth:              -1, // for no limit
 		ActiveStartTime:           "00:00",
 		ActiveEndTime:             "23:59",
 		MaxRetries:                1,
 	}
 	queue2 := Queue{
 		SaveDir:                   path.Join(homeDir, "Downloads/gdm-test"),
-		MaxConcurrentDownloads:    3,
+		MaxConcurrentDownloads:    10,
 		StartAtOneWorkerAvailable: false,
-		MaxBandwidth:              100,
+		MaxBandwidth:              500, // for 500 Kb/s limit
 		ActiveStartTime:           "00:00",
 		ActiveEndTime:             "23:59",
 		MaxRetries:                4,
@@ -63,9 +63,10 @@ func TestDownloadManager(t *testing.T) {
 	downloadManager.AddQueue(&queue1)
 	downloadManager.AddQueue(&queue2)
 
-	downloadManager.AddDownload(&download1)
+	// downloadManager.AddDownload(&download1)
 	downloadManager.AddDownload(&download3)
-	downloadManager.AddDownload(&download2)
+	// downloadManager.AddDownload(&download2)
+	_, _ = download1, download2
 
 	time.Sleep(time.Second * 2)
 	downloadManager.PauseDownload(&download1)

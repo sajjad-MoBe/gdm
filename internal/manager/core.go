@@ -203,7 +203,6 @@ func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitG
 			download.Status = "paused"
 		}
 	}()
-
 }
 
 func (dm *DownloadManager) partDownload(download *Download, partDownloader *PartDownloader) error {
@@ -278,8 +277,14 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 			break
 		}
 		if err != nil {
-			partDownloader.IsFailed = true
-			return err
+			download.Retries++
+			if download.Retries > download.Queue.MaxRetries {
+				partDownloader.IsFailed = true
+				return err
+			}
+		}
+		if download.Retries > download.Queue.MaxRetries {
+			return nil
 		}
 	}
 
@@ -293,7 +298,7 @@ func (queue *Queue) SetBandwith(bandwith int) {
 	}
 	queue.tokenBucket = make(chan struct{}, bandwith)
 	go func() {
-		tokenInterval := max(1, 1000_000/queue.MaxBandwidth)
+		tokenInterval := max(1, 1000_000/bandwith)
 		queue.ticker = time.NewTicker(time.Duration(tokenInterval) * time.Microsecond)
 		queue.MaxBandwidth = bandwith
 
