@@ -76,58 +76,54 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 }
 
 func (dm *DownloadManager) AddDownload(download *Download) {
-	download.Temps = &DownloadTemps{false, 0, 0, time.Now(), &sync.Mutex{}}
+	download.Temps = &DownloadTemps{0, time.Now(), &sync.Mutex{}}
 	download.IsActive = false
 	if download.Status != "finished" && download.Status != "failed" && download.Status != "paused" {
 		download.Status = "initializing"
 	}
 	download.Queue.Downloads = append(download.Queue.Downloads, download)
 	go func() {
+		if download.TotalSize < 1 {
+			resp, err := http.Head(download.URL)
+			if err != nil {
+				// fmt.Println("Error:", err)
+				download.Status = "failed"
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				download.Status = "failed"
+				// fmt.Println("Failed to fetch file details:", resp.Status)
+				return
+			}
+			download.TotalSize = resp.ContentLength
+			resp.Body.Close()
 
-		resp, err := http.Head(download.URL)
-		if err != nil {
-			// fmt.Println("Error:", err)
-			download.Status = "failed"
-			return
+			req, _ := http.NewRequest("GET", download.URL, nil)
+			client := &http.Client{}
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", 0, 1))
+			resp, err = client.Do(req)
+			if err != nil {
+				download.Status = "failed"
+				// fmt.Println("Error:", err)
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusPartialContent {
+				download.IsPartial = false
+			} else {
+				download.IsPartial = true
+				// fmt.Println(download.Temps.TotalSize)
+			}
 		}
-		if resp.StatusCode != http.StatusOK {
-			download.Status = "failed"
-			// fmt.Println("Failed to fetch file details:", resp.Status)
-			return
-		}
-		download.Temps.TotalSize = resp.ContentLength
-		resp.Body.Close()
-
-		req, _ := http.NewRequest("GET", download.URL, nil)
-		client := &http.Client{}
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", 0, 1))
-		resp, err = client.Do(req)
-		if err != nil {
-			download.Status = "failed"
-			// fmt.Println("Error:", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusPartialContent {
-			download.PartDownloaders = append(download.PartDownloaders, &PartDownloader{
-				Index:    0,
-				Start:    0,
-				End:      0,
-				TempFile: filepath.Join(dm.TempFolder, download.OutputFile+"-part-0.tmp"),
-			})
-
-			download.Temps.IsPartial = false
-		} else {
-			download.Temps.IsPartial = true
-			// fmt.Println(download.Temps.TotalSize)
-			numParts := min(dm.MaxParts, max(1, int(download.Temps.TotalSize/(int64(dm.PartSize)*1024*1024)))) // each partSize mb add to new part
-			partSize := download.Temps.TotalSize / int64(numParts)
+		if download.IsPartial {
+			numParts := min(dm.MaxParts, max(1, int(download.TotalSize/(int64(dm.PartSize)*1024*1024)))) // each partSize mb add to new part
+			partSize := download.TotalSize / int64(numParts)
 			for i := 0; i < numParts; i++ {
 				start := partSize * int64(i)
 				end := start + partSize - 1
 				if i == numParts-1 {
-					end = download.Temps.TotalSize - 1
+					end = download.TotalSize - 1
 				}
 				tempFile := fmt.Sprintf(download.OutputFile+"-part-%d.tmp", i)
 				tempFile = filepath.Join(dm.TempFolder, tempFile)
@@ -136,6 +132,13 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 					&PartDownloader{Index: i, Start: start + getFileSize(tempFile), End: end, TempFile: tempFile},
 				)
 			}
+		} else {
+			download.PartDownloaders = append(download.PartDownloaders, &PartDownloader{
+				Index:    0,
+				Start:    0,
+				End:      0,
+				TempFile: filepath.Join(dm.TempFolder, download.OutputFile+"-part-0.tmp"),
+			})
 		}
 		download.Status = "pending"
 	}()
@@ -215,7 +218,7 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 	// fmt.Println(partDownloader.TempFile, partDownloader.Start)
 	if partDownloader.Start < partDownloader.End {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", partDownloader.Start, partDownloader.End))
-	} else if download.Temps.IsPartial {
+	} else if download.IsPartial {
 		return nil
 	}
 

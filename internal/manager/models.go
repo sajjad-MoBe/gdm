@@ -28,14 +28,15 @@ type Download struct {
 	QueueID         uint              `gorm:"not null" json:"queue_id"`
 	IsActive        bool              `gorm:"default:false" json:"is_active"`
 	Status          string            `json:"status"`
+	TotalSize       int64             `gorm:"default:0" json:"total_size"`
+	IsPartial       bool              `gorm:"default:false" json:"is_partial"`
 	OutputFile      string            `json:"output_file"`
 	URL             string            `json:"url"`
 	Retries         int               `gorm:"default:0" json:"retries"`
 	Queue           *Queue            `gorm:"foreignKey:QueueID"`
 }
+
 type DownloadTemps struct {
-	IsPartial       bool
-	TotalSize       int64
 	TotalDownloaded int64
 	StartTime       time.Time
 	Mutex           *sync.Mutex
