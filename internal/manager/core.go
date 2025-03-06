@@ -33,7 +33,6 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 	}
 	go func() {
 		for {
-			// var progress string
 			if IsWithinActiveHours(queue.ActiveStartTime, queue.ActiveEndTime) {
 				queue.IsActive = true
 				for _, download := range queue.Downloads {
@@ -44,8 +43,7 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 						}
 						time.Sleep(time.Millisecond * 500)
 					}
-					// freeDownloaderss := queue.MaxConcurrentDownloads - len(queue.PartDownloaders)
-					// fmt.Println(download.URL, download.Status, freeDownloaderss, len(download.PartDownloaders))
+
 					if download.Status != "pending" {
 						continue
 					}
@@ -240,13 +238,23 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 	defer file.Close()
 
 	var buf []byte
-	if download.Queue.MaxBandwidth > 0 {
+	bandwidth := download.Queue.MaxBandwidth
+	if bandwidth > 0 {
 		buf = make([]byte, 1024) // 2^10 or 1 Kb
 	} else {
 		buf = make([]byte, 1024*1024) // 2^20 or 1 Mb
 	}
 	startTime := time.Now()
 	for {
+		if download.Queue.MaxBandwidth != bandwidth {
+			time.Sleep(1 * time.Second)
+			bandwidth := download.Queue.MaxBandwidth // get new bandwith
+			if bandwidth > 0 {
+				buf = make([]byte, 1024) // 2^10 or 1 Kb
+			} else {
+				buf = make([]byte, 1024*1024) // 2^20 or 1 Mb
+			}
+		}
 		if download.Queue.MaxBandwidth > 0 {
 			<-download.Queue.tokenBucket
 		}
@@ -279,14 +287,16 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 }
 
 func (queue *Queue) SetBandwith(bandwith int) {
+	queue.MaxBandwidth = -1
 	if queue.ticker != nil {
 		queue.ticker.Stop()
 	}
-	queue.MaxBandwidth = bandwith
-	queue.tokenBucket = make(chan struct{}, queue.MaxBandwidth)
+	queue.tokenBucket = make(chan struct{}, bandwith)
 	go func() {
 		tokenInterval := max(1, 1000_000/queue.MaxBandwidth)
 		queue.ticker = time.NewTicker(time.Duration(tokenInterval) * time.Microsecond)
+		queue.MaxBandwidth = bandwith
+
 		defer queue.ticker.Stop()
 		for range queue.ticker.C {
 			select {

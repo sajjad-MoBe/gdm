@@ -26,7 +26,7 @@ func TestDownloadManager(t *testing.T) {
 		SaveDir:                   path.Join(homeDir, "Downloads/gdm-test"),
 		MaxConcurrentDownloads:    3,
 		StartAtOneWorkerAvailable: false,
-		MaxBandwidth:              500,
+		MaxBandwidth:              100,
 		ActiveStartTime:           "00:00",
 		ActiveEndTime:             "23:59",
 		MaxRetries:                4,
@@ -49,7 +49,7 @@ func TestDownloadManager(t *testing.T) {
 	}
 	download3 := Download{
 		QueueID:    queue1.ID,
-		Queue:      &queue1,
+		Queue:      &queue2,
 		Status:     "pending",
 		OutputFile: "10mb.zip",
 		URL:        "http://212.183.159.230/10MB.zip",
@@ -69,8 +69,10 @@ func TestDownloadManager(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 	downloadManager.PauseDownload(&download1)
-	time.Sleep(time.Second * 20)
+	time.Sleep(time.Second * 10)
 	downloadManager.ResumeDownload(&download1)
+	queue1.SetBandwith(10)
+	time.Sleep(time.Second * 10)
 
 	for {
 		ended := true
