@@ -154,6 +154,10 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 	}()
 }
 
+func (dm *DownloadManager) PauseDownload(download *Download) {
+	download.Status = "paused"
+}
+
 func (dm *DownloadManager) startDownload(download *Download, tokenBucket chan struct{}, StartWG *sync.WaitGroup) {
 
 	var wg sync.WaitGroup
