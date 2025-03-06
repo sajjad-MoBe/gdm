@@ -1,4 +1,4 @@
-package db
+package manager
 
 import (
 	"fmt"
@@ -17,19 +17,20 @@ func TestCreateAndGetObject(t *testing.T) {
 	}
 
 	// Migrate the schema
-	if err := db.AutoMigrate(&Queue{}, &Download{}, &Worker{}); err != nil {
+	if err := db.AutoMigrate(&Queue{}, &Download{}); err != nil {
 		t.Fatalf("failed to migrate database: %v", err)
 	}
 	SetCustomDB(db)
 
 	// Create a new queue entry
 	queue := Queue{
-		SaveDir:                "/downloads",
-		MaxConcurrentDownloads: 5,
-		MaxBandwidth:           -1,
-		ActiveStartTime:        "00:00",
-		ActiveEndTime:          "23:59",
-		MaxRetries:             1,
+		SaveDir:                   "~/downloads",
+		StartAtOneWorkerAvailable: true,
+		MaxConcurrentDownloads:    5,
+		MaxBandwidth:              -1,
+		ActiveStartTime:           "00:00",
+		ActiveEndTime:             "23:59",
+		MaxRetries:                1,
 	}
 
 	// Test creating the queue
@@ -54,7 +55,7 @@ func TestCreateAndGetObject(t *testing.T) {
 		t.Errorf("expected SaveDir %s, got %s", queue.SaveDir, queues[0].SaveDir)
 	}
 
-	queues, err = GetQueueBy("save_dir", "/downloads")
+	queues, err = GetQueueBy("save_dir", "~/downloads")
 	if err != nil {
 		log.Fatalf("Error retrieving queues with %s='%s': %v", "save_dir", "/downloads", err)
 	}
@@ -63,12 +64,14 @@ func TestCreateAndGetObject(t *testing.T) {
 	}
 
 	download := Download{
-		QueueID: queue.ID, // Use the created Queue ID
-		// Queue:   queue,
-		Status:  "pending",
-		URL:     "https://example.com/download",
-		Retries: 0,
+		QueueID:    queue.ID, // Use the created Queue ID
+		Queue:      &queue,
+		OutputFile: "10mb.zip",
+		Status:     "pending",
+		URL:        "https://example.com/download",
+		Retries:    0,
 	}
+	fmt.Printf("download: %+v\n", download.Queue)
 
 	// Save the Download to the database
 	if err := Create(&download); err != nil {
@@ -111,25 +114,6 @@ func TestCreateAndGetObject(t *testing.T) {
 	}
 	if downloads[0].Retries != savedDownload.Retries {
 		t.Errorf("Expected Retries %d, got %d", downloads[0].Retries, savedDownload.Retries)
-	}
-
-	worker := Worker{
-		DownloadID:     download.ID,
-		TempPath:       "/tmp/downloads/file.tmp",
-		SizeRangeStart: 0,
-		SizeRangeEnd:   1024 * 1024, // Example range: 0 to 1MB
-	}
-	if err := Create(&worker); err != nil {
-		log.Fatalf("Failed to create worker: %v", err)
-	}
-
-	// Verify the Worker was saved correctly
-	workers, err := GetWorkerBy("id", worker.ID)
-	if err != nil {
-		t.Fatalf("Failed to retrieve worker: %v", err)
-	}
-	for _, p := range workers {
-		fmt.Printf("Worker: %+v\n", p)
 	}
 
 }

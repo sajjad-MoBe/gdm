@@ -1,4 +1,4 @@
-package db
+package manager
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 
 var database *gorm.DB
 
-func Initialize() {
+func InitializeDB() {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		log.Fatal("Failed to get config directory:", err)
@@ -33,14 +33,14 @@ func Initialize() {
 		log.Fatal("Failed to open database:", err)
 		return
 	}
-	err = database.AutoMigrate(&Queue{}, &Download{}, &Worker{})
+	err = database.AutoMigrate(&Queue{}, &Download{})
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
 }
 
-func Close() {
+func CloseDB() {
 	sqlDB, err := database.DB()
 	if err != nil {
 		log.Fatal(err)

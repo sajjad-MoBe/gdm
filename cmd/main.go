@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/sajjad-mobe/gdm/internal/db"
+	"github.com/sajjad-mobe/gdm/internal/manager"
 	"github.com/sajjad-mobe/gdm/internal/tui"
 )
 
 func main() {
-	db.Initialize()
+	manager.InitializeDB()
 
-	database := db.GetDB()
+	database := manager.GetDB()
 	fmt.Println(database)
-	defer db.Close()
+	defer manager.CloseDB()
 
 	app := tui.NewApp()
 	if _, err := app.Run(); err != nil {
