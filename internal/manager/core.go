@@ -2,6 +2,7 @@ package manager
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -74,7 +75,7 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 					// queueMutex.Unlock()
 					var StartWG sync.WaitGroup
 					StartWG.Add(len(download.PartDownloaders))
-					// dm.startDownload(download, tokenBucket, &StartWG)
+					dm.startDownload(download, tokenBucket, &StartWG)
 					StartWG.Wait()
 
 				}
@@ -151,4 +152,120 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 		}
 		download.Status = "pending"
 	}()
+}
+
+func (dm *DownloadManager) startDownload(download *Download, tokenBucket chan struct{}, StartWG *sync.WaitGroup) {
+
+	var wg sync.WaitGroup
+	// fmt.Println("downloading " + download.URL)
+	for _, part := range download.PartDownloaders {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			download.Queue.PartDownloaders <- part
+			StartWG.Done()
+			// fmt.Println("part", part.Index, "started")
+			err := dm.partDownload(download, part, tokenBucket)
+			if err != nil {
+				// fmt.Println(err)
+				part.IsFailed = true
+				<-download.Queue.PartDownloaders
+				return
+			}
+			part.IsFailed = false
+			// time.Sleep(5 * time.Second)
+			// fmt.Println("end of ", download.URL)
+			<-download.Queue.PartDownloaders
+
+		}()
+	}
+	time.Sleep(time.Second * 10)
+	// close(download.IsCompletlyStarted)
+	download.Temps.StartTime = time.Now()
+	download.Status = "downloading"
+
+	go func() {
+		wg.Wait()
+		IsDone := true
+		IsPaused := false
+		for _, part := range download.PartDownloaders {
+			if part.IsPaused {
+				IsPaused = true
+				IsDone = false
+				break
+			}
+			if part.IsFailed {
+				IsDone = false
+				break
+			}
+		}
+		if IsDone {
+			download.Status = "finished"
+			fmt.Println(download.URL, "finished")
+		}
+		if IsPaused {
+			download.Status = "paused"
+		}
+	}()
+
+}
+
+func (dm *DownloadManager) partDownload(download *Download, partDownloader *PartDownloader, tokenBucket chan struct{}) error {
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", download.URL, nil)
+	if err != nil {
+		return err
+	}
+	if partDownloader.Start < partDownloader.End {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", partDownloader.Start, partDownloader.End))
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	file, err := os.OpenFile(
+		filepath.Join(dm.TempFolder, partDownloader.TempFile),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// file, err := os.Create(partDownloader.TempFile)
+
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	buf := make([]byte, 1024) // 2^10 or 1 Kb
+	startTime := time.Now()
+	for {
+		<-tokenBucket
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			// limiter.WaitN(context.Background(), n)
+
+			partDownloader.Downloaded += int64(n)
+			download.Temps.Mutex.Lock()
+			download.Temps.TotalDownloaded += int64(n)
+			download.Temps.Mutex.Unlock()
+			file.Write(buf[:n])
+			elapsed := time.Since(startTime).Seconds()
+			partDownloader.Speed = int64(float64(partDownloader.Downloaded) / elapsed)
+		}
+		if err == io.EOF {
+			break
+		}
+		if !download.Queue.IsActive || download.Status == "paused" {
+			partDownloader.IsPaused = true
+			break
+		}
+		if err != nil {
+			partDownloader.IsFailed = true
+			return err
+		}
+	}
+
+	return nil
 }
