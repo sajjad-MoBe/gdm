@@ -8,6 +8,8 @@ import (
 type Queue struct {
 	PartDownloaders           chan *PartDownloader `gorm:"-"`
 	Downloads                 []*Download          `gorm:"-"`
+	tokenBucket               chan struct{}        `gorm:"-"`
+	ticker                    *time.Ticker         `gorm:"-"`
 	ID                        uint                 `gorm:"primaryKey" json:"id"`
 	IsActive                  bool                 `gorm:"default:false" json:"is_active"`
 	SaveDir                   string               `json:"save_dir"`

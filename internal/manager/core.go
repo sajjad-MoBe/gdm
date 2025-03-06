@@ -14,35 +14,23 @@ import (
 func NewManager(maxParts, partSize int) *DownloadManager {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		log.Fatal("Failed to get config directory:", err)
+		configDir = "./"
 	}
 
-	appConfigDir := filepath.Join(configDir, "gdm/tempparts")
-	if err := os.MkdirAll(appConfigDir, os.ModePerm); err != nil {
-		log.Fatal("Failed to create config directory:", err)
+	TempFolder := filepath.Join(configDir, "gdm/tempparts")
+	if err := os.MkdirAll(TempFolder, os.ModePerm); err != nil {
+		log.Fatal("Failed to create temp directory:", err)
 	}
-	return &DownloadManager{Queues: []*Queue{}, MaxParts: maxParts, PartSize: partSize, TempFolder: appConfigDir}
+	return &DownloadManager{Queues: []*Queue{}, MaxParts: maxParts, PartSize: partSize, TempFolder: TempFolder}
 }
 
 func (dm *DownloadManager) AddQueue(queue *Queue) {
 	queue.IsActive = false
 	queue.PartDownloaders = make(chan *PartDownloader, queue.MaxConcurrentDownloads)
 	dm.Queues = append(dm.Queues, queue)
-	tokenInterval := max(1, 1000_000/queue.MaxBandwidth)
-
-	tokenBucket := make(chan struct{}, queue.MaxBandwidth)
-	go func() {
-		ticker := time.NewTicker(time.Duration(tokenInterval) * time.Microsecond)
-		defer ticker.Stop()
-		for range ticker.C {
-			select {
-			case tokenBucket <- struct{}{}:
-			default:
-				// Do nothing if the bucket is full
-			}
-		}
-	}()
-
+	if queue.MaxBandwidth > 0 {
+		queue.SetBandwith(queue.MaxBandwidth)
+	}
 	go func() {
 		for {
 			// var progress string
@@ -75,7 +63,7 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 					// queueMutex.Unlock()
 					var StartWG sync.WaitGroup
 					StartWG.Add(len(download.PartDownloaders))
-					dm.startDownload(download, tokenBucket, &StartWG)
+					dm.startDownload(download, &StartWG)
 					StartWG.Wait()
 
 				}
@@ -128,7 +116,7 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 				Index:    0,
 				Start:    0,
 				End:      0,
-				TempFile: download.OutputFile + "-part-0.tmp",
+				TempFile: filepath.Join(dm.TempFolder, download.OutputFile+"-part-0.tmp"),
 			})
 
 			download.Temps.IsPartial = false
@@ -144,6 +132,7 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 					end = download.Temps.TotalSize - 1
 				}
 				tempFile := fmt.Sprintf(download.OutputFile+"-part-%d.tmp", i)
+				tempFile = filepath.Join(dm.TempFolder, tempFile)
 				download.PartDownloaders = append(
 					download.PartDownloaders,
 					&PartDownloader{Index: i, Start: start + getFileSize(tempFile), End: end, TempFile: tempFile},
@@ -162,7 +151,7 @@ func (dm *DownloadManager) ResumeDownload(download *Download) {
 	download.Status = "initializing"
 }
 
-func (dm *DownloadManager) startDownload(download *Download, tokenBucket chan struct{}, StartWG *sync.WaitGroup) {
+func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitGroup) {
 
 	var wg sync.WaitGroup
 	// fmt.Println("downloading " + download.URL)
@@ -173,7 +162,7 @@ func (dm *DownloadManager) startDownload(download *Download, tokenBucket chan st
 			download.Queue.PartDownloaders <- part
 			StartWG.Done()
 			// fmt.Println("part", part.Index, "started")
-			err := dm.partDownload(download, part, tokenBucket)
+			err := dm.partDownload(download, part)
 			if err != nil {
 				// fmt.Println(err)
 				part.IsFailed = true
@@ -219,15 +208,18 @@ func (dm *DownloadManager) startDownload(download *Download, tokenBucket chan st
 
 }
 
-func (dm *DownloadManager) partDownload(download *Download, partDownloader *PartDownloader, tokenBucket chan struct{}) error {
+func (dm *DownloadManager) partDownload(download *Download, partDownloader *PartDownloader) error {
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", download.URL, nil)
 	if err != nil {
 		return err
 	}
+	// fmt.Println(partDownloader.TempFile, partDownloader.Start)
 	if partDownloader.Start < partDownloader.End {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", partDownloader.Start, partDownloader.End))
+	} else if download.Temps.IsPartial {
+		return nil
 	}
 
 	resp, err := client.Do(req)
@@ -238,7 +230,7 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 	defer resp.Body.Close()
 
 	file, err := os.OpenFile(
-		filepath.Join(dm.TempFolder, partDownloader.TempFile),
+		partDownloader.TempFile,
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	// file, err := os.Create(partDownloader.TempFile)
 
@@ -247,10 +239,17 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 	}
 	defer file.Close()
 
-	buf := make([]byte, 1024) // 2^10 or 1 Kb
+	var buf []byte
+	if download.Queue.MaxBandwidth > 0 {
+		buf = make([]byte, 1024) // 2^10 or 1 Kb
+	} else {
+		buf = make([]byte, 1024*1024) // 2^20 or 1 Mb
+	}
 	startTime := time.Now()
 	for {
-		<-tokenBucket
+		if download.Queue.MaxBandwidth > 0 {
+			<-download.Queue.tokenBucket
+		}
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
 			// limiter.WaitN(context.Background(), n)
@@ -279,42 +278,21 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 	return nil
 }
 
-func mergeParts(download *Download) error {
-	if err := os.MkdirAll(download.Queue.SaveDir, os.ModePerm); err != nil {
-		return err
+func (queue *Queue) SetBandwith(bandwith int) {
+	if queue.ticker != nil {
+		queue.ticker.Stop()
 	}
-	fullPath := filepath.Join(download.Queue.SaveDir, download.OutputFile)
-	counter := 1
-	for {
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			break
+	queue.MaxBandwidth = bandwith
+	queue.tokenBucket = make(chan struct{}, queue.MaxBandwidth)
+	go func() {
+		tokenInterval := max(1, 1000_000/queue.MaxBandwidth)
+		queue.ticker = time.NewTicker(time.Duration(tokenInterval) * time.Microsecond)
+		defer queue.ticker.Stop()
+		for range queue.ticker.C {
+			select {
+			case queue.tokenBucket <- struct{}{}:
+			default:
+			}
 		}
-		newFilename := fmt.Sprintf("%s(%d)%s",
-			download.OutputFile[:len(download.OutputFile)-len(filepath.Ext(download.OutputFile))],
-			counter, filepath.Ext(download.OutputFile),
-		)
-		fullPath = filepath.Join(download.Queue.SaveDir, newFilename)
-		counter++
-	}
-	outFile, err := os.Create(fullPath)
-	if err != nil {
-		return err
-	}
-	defer outFile.Close()
-
-	for _, p := range download.PartDownloaders {
-		partFile, err := os.Open(p.TempFile)
-		if err != nil {
-			return err
-		}
-		defer os.Remove(p.TempFile)
-		defer partFile.Close()
-
-		_, err = io.Copy(outFile, partFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	}()
 }
