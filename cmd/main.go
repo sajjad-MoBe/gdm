@@ -2,21 +2,16 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"os"
 
-	"github.com/sajjad-mobe/gdm/internal/manager"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sajjad-mobe/gdm/internal/tui"
 )
 
 func main() {
-	manager.InitializeDB()
-
-	database := manager.GetDB()
-	fmt.Println(database)
-	defer manager.CloseDB()
-
-	app := tui.NewApp()
-	if _, err := app.Run(); err != nil {
-		log.Fatalf("Failed to start the app: %v", err)
+	p := tea.NewProgram(tui.NewModel())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error starting TUI: %v\n", err)
+		os.Exit(1)
 	}
 }

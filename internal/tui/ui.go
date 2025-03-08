@@ -2,89 +2,163 @@ package tui
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-type Download struct {
-	URL      string
-	Queue    string
-	Status   string
-	Speed    string
-	Progress string
+// Tabs constants
+const (
+	tabAddDownload = iota
+	tabDownloads
+	tabQueues
+)
+
+// Model defines the UI state
+type model struct {
+	currentTab int
+	inputURL   textinput.Model
+	table      table.Model
+	list       list.Model
+	typing     bool
+	loading    bool
+	err        error
+
+	// Additional state for downloads and queues
+	downloads list.Model // Displaying ongoing downloads
+	queues    list.Model // Displaying queues
 }
 
-type App struct {
-	downloads   []Download
-	currentPage string
+// Define color styles using lipgloss
+var (
+	redStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // Red
+	greenStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // Green
+	yellowStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // Yellow
+	blueStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("4")) // Blue
+	magentaStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5")) // Magenta
+)
+
+// Init initializes the UI
+func (m model) Init() tea.Cmd {
+	return textinput.Blink
 }
 
-func NewApp() *App {
-	return &App{
-		downloads: []Download{},
-	}
-}
-
-func (a *App) Init() tea.Cmd {
-	return nil
-}
-
-func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update handles messages (keypresses)
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "f1":
-			a.currentPage = "Add Download"
-		case "f2":
-			a.currentPage = "Downloads List"
-		case "f3":
-			a.currentPage = "Queues List"
-		case "a":
-			// Switch to Add Download page
-			a.currentPage = "Add Download"
-		case "d":
-			// Handle delete action
-		case "e":
-			// Handle edit action
+		case "q": // Quit program
+			return m, tea.Quit
+		case "left": // Left arrow: Previous tab
+			if m.currentTab > 0 {
+				m.currentTab--
+			}
+		case "right": // Right arrow: Next tab
+			if m.currentTab < tabQueues {
+				m.currentTab++
+			}
+		case "enter": // Handle enter key
+			switch m.currentTab {
+			case tabAddDownload:
+				query := m.inputURL.Value()
+				if query != "" {
+					// Add the download to the list (simulating)
+					m.loading = true
+					m.err = nil
+				}
+			}
+		case "esc": // Escape key
+			if !m.typing && !m.loading {
+				m.typing = true
+				m.err = nil
+			}
+		case "d": // Delete selected download
+			if m.currentTab == tabDownloads {
+				// Delete download logic here
+			}
+		case "p": // Pause/Resume download
+			if m.currentTab == tabDownloads {
+				// Pause/Resume logic here
+			}
+		case "r": // Retry failed download
+			if m.currentTab == tabDownloads {
+				// Retry logic here
+			}
 		}
 	}
 
-	return a, nil
-}
-
-func (a *App) View() string {
-	var output string
-	switch a.currentPage {
-	case "Add Download":
-		output = a.renderAddDownloadPage()
-	case "Downloads List":
-		output = a.renderDownloadsListPage()
-	case "Queues List":
-		output = a.renderQueuesListPage()
+	// Update the components based on the current tab
+	if m.typing {
+		var cmd tea.Cmd
+		m.inputURL, cmd = m.inputURL.Update(msg)
+		return m, cmd
 	}
 
-	return output + "\nF1: Add Download | F2: Downloads List | F3: Queues List"
-}
-
-func (a *App) renderAddDownloadPage() string {
-	return "Add Download Page\nEnter the URL and Output Name."
-}
-
-func (a *App) renderDownloadsListPage() string {
-	var downloadsList string
-	for _, d := range a.downloads {
-		downloadsList += fmt.Sprintf("URL: %s | Queue: %s | Status: %s | Speed: %s | Progress: %s\n",
-			d.URL, d.Queue, d.Status, d.Speed, d.Progress)
+	if m.loading {
+		// Simulate loading action (this could be customized with a spinner or something similar)
+		m.loading = false
 	}
-	return "Downloads List:\n" + downloadsList
+
+	return m, nil
 }
 
-func (a *App) renderQueuesListPage() string {
-	// This can be customized with your own queue logic
-	return "Queues List:\nNo queues available."
+// View renders the UI
+func (m model) View() string {
+	var content string
+	switch m.currentTab {
+	case tabAddDownload:
+		content = fmt.Sprintf("%s\n\nURL: %s\n\n[Press ←/→ to switch tabs]", blueStyle.Render("Add Download"), m.inputURL.View())
+	case tabDownloads:
+		content = yellowStyle.Render("Downloads List") + "\n\n[Press ←/→ to switch tabs]"
+
+		// Render the download list here as a table or a list
+		if len(m.downloads.Items()) > 0 {
+			content += "\n\n" + m.downloads.View()
+		} else {
+			content += "\n\n" + redStyle.Render("No downloads available.")
+		}
+	case tabQueues:
+		content = magentaStyle.Render("Queues List") + "\n\n[Press ←/→ to switch tabs]"
+		if len(m.queues.Items()) > 0 {
+			content += "\n\n" + m.queues.View()
+		} else {
+			content += "\n\n" + redStyle.Render("No queues available.")
+		}
+	}
+
+	// Render the final UI with borders and styles
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(1, 2).
+		Render(fmt.Sprintf("%s %d\n\n%s", greenStyle.Render("UI Status:"), m.currentTab, content))
 }
 
-func (a *App) Run() (tea.Model, error) {
-	p := tea.NewProgram(a)
-	return p.Run() // Run returns both tea.Model and error
+// NewModel initializes the UI model
+func NewModel() model {
+	ti := textinput.New()
+	ti.Placeholder = "Enter Download URL..."
+	ti.Focus()
+
+	// Set up the lists for downloads and queues (can be expanded)
+	downloads := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+	queues := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+
+	// If file doesn't exist, create default file and load data
+	if _, err := os.Stat("data.json"); os.IsNotExist(err) {
+		// Create and load default data
+		// Note: This is a placeholder and should be expanded with actual data creation logic.
+	}
+
+	return model{
+		currentTab: tabAddDownload,
+		inputURL:   ti,
+		typing:     true,
+		downloads:  downloads,
+		queues:     queues,
+	}
 }
