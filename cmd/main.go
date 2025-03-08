@@ -11,7 +11,10 @@ import (
 func main() {
 	p := tea.NewProgram(tui.NewModel())
 	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error starting TUI: %v\n", err)
+		_, err := fmt.Fprintf(os.Stderr, "Error starting TUI: %v\n", err)
+		if err != nil {
+			return
+		}
 		os.Exit(1)
 	}
 }

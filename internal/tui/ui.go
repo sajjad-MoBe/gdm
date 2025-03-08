@@ -19,7 +19,7 @@ const (
 )
 
 // Model defines the UI state
-type model struct {
+type Model struct { // Renamed to 'Model' to make it exported
 	currentTab int
 	inputURL   textinput.Model
 	table      table.Model
@@ -43,12 +43,12 @@ var (
 )
 
 // Init initializes the UI
-func (m model) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return textinput.Blink
 }
 
 // Update handles messages (keypresses)
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -71,6 +71,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.loading = true
 					m.err = nil
 				}
+			default:
+				//Do Nothing
+
 			}
 		case "esc": // Escape key
 			if !m.typing && !m.loading {
@@ -108,7 +111,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the UI
-func (m model) View() string {
+func (m Model) View() string {
 	var content string
 	switch m.currentTab {
 	case tabAddDownload:
@@ -139,7 +142,7 @@ func (m model) View() string {
 }
 
 // NewModel initializes the UI model
-func NewModel() model {
+func NewModel() Model {
 	ti := textinput.New()
 	ti.Placeholder = "Enter Download URL..."
 	ti.Focus()
@@ -154,7 +157,7 @@ func NewModel() model {
 		// Note: This is a placeholder and should be expanded with actual data creation logic.
 	}
 
-	return model{
+	return Model{
 		currentTab: tabAddDownload,
 		inputURL:   ti,
 		typing:     true,
