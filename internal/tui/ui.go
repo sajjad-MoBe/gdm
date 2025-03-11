@@ -106,20 +106,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "up", "k":
 			if m.currentTab == tabAddDownload {
-				m.handleUpArrow()
+				m.handleUpArrowForTab1()
 			}
-			if m.selectedRow > 0 {
-				m.selectedRow--
+			if m.currentTab == tabDownloads {
+				m.handleUpArrowForTab2()
 			}
 
 		case "down", "j":
 			if m.currentTab == tabAddDownload {
-				m.handleDownArrow()
+				m.handleDownArrowForTab1()
 			}
 			if m.currentTab == tabDownloads {
-				if m.selectedRow < len(m.downloadsTable.Rows())-1 {
-					m.selectedRow++
-				}
+				m.handleDownArrowForTab2()
 			}
 		case "tab":
 			if m.currentTab == tabAddDownload {
@@ -145,19 +143,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Update the text inputs based on focus
-	if m.focusedField == 0 {
-		m.inputURL, cmd = m.inputURL.Update(msg)
-	} else if m.focusedField == 1 {
-		m.pageSelect, cmd = m.pageSelect.Update(msg)
-	} else if m.focusedField == 2 {
-		m.outputFileName, cmd = m.outputFileName.Update(msg)
+	if m.currentTab == tabAddDownload {
+		if m.focusedField == 0 {
+			m.inputURL, cmd = m.inputURL.Update(msg)
+		} else if m.focusedField == 1 {
+			m.pageSelect, cmd = m.pageSelect.Update(msg)
+		} else if m.focusedField == 2 {
+			m.outputFileName, cmd = m.outputFileName.Update(msg)
+		}
+		// Clear messages if necessary
+		m.clearMessages()
+		// Update the focused field accordingly
+		m.updateFocusedField(msg)
 	}
-
-	// Clear messages if necessary
-	m.clearMessages()
-
-	// Update the focused field accordingly
-	m.updateFocusedField(msg)
 
 	return m, cmd
 }
@@ -216,15 +214,27 @@ func (m *Model) resetFields() {
 	m.selectedFiles = make(map[int]struct{})
 }
 
-func (m *Model) handleUpArrow() {
-	if m.currentTab == tabAddDownload && m.focusedField == 1 && m.selectedPage > 0 {
+func (m *Model) handleUpArrowForTab1() {
+	if m.focusedField == 1 && m.selectedPage > 0 {
 		m.selectedPage--
 	}
 }
 
-func (m *Model) handleDownArrow() {
-	if m.currentTab == tabAddDownload && m.focusedField == 1 && m.selectedPage < len(m.pageSelect.Items())-1 {
+func (m *Model) handleDownArrowForTab1() {
+	if m.focusedField == 1 && m.selectedPage < len(m.pageSelect.Items())-1 {
 		m.selectedPage++
+	}
+}
+
+func (m *Model) handleUpArrowForTab2() {
+	if m.selectedRow > 0 {
+		m.selectedRow--
+	}
+}
+
+func (m *Model) handleDownArrowForTab2() {
+	if m.selectedRow < len(m.downloadsTable.Rows())-1 {
+		m.selectedRow++
 	}
 }
 
