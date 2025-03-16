@@ -558,4 +558,5 @@ func (m *Model) updateDownloadTable() {
 		downloadRows[index][3] = strconv.Itoa(download.GetProgress())
 
 	}
+	m.downloadsTable.SetRows(downloadRows)
 }
