@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// Global Variables
+var counterForForms = 0
+
 // Define your table columns for the Downloads tab
 var downloadColumns = []table.Column{
 	{Title: "Queue ID", Width: 10},
@@ -27,6 +30,23 @@ var downloadRows = []table.Row{
 	{"4", "https://example.com/file4.zip", "Failed", "N/A", "N/A"},
 }
 
+// Define your table columns for the Queues tab
+var queueColumns = []table.Column{
+	{Title: "Queue ID", Width: 10},
+	{Title: "SaveDir", Width: 20},
+	{Title: "Max Concurrent", Width: 15},
+	{Title: "Max Bandwidth", Width: 15},
+	{Title: "Active Start Time", Width: 20},
+	{Title: "Active End Time", Width: 20},
+}
+
+// Sample rows for the Queues table
+var queueRows = []table.Row{
+	{"1", "/path/to/dir1", "5", "100 MB/s", "08:00 AM", "06:00 PM"},
+	{"2", "/path/to/dir2", "3", "50 MB/s", "09:00 AM", "05:00 PM"},
+	{"3", "/path/to/dir3", "2", "30 MB/s", "10:00 AM", "04:00 PM"},
+}
+
 // Tabs constants
 const (
 	tabAddDownload = iota
@@ -37,37 +57,51 @@ const (
 // Model for the table content in Downloads tab
 type Model struct {
 	// Existing fields
-	currentTab          int
-	inputURL            textinput.Model
-	pageSelect          list.Model
-	outputFileName      textinput.Model
-	selectedPage        int
-	selectedFiles       map[int]struct{} // Tracks selected pages
-	focusedField        int              // 0 for inputURL, 1 for pageSelect, 2 for outputFileName
-	confirmationMessage string           // Holds the confirmation message
-	errorMessage        string           // Holds the error message (if URL is empty)
-	confirmationTime    time.Time        // Time when confirmation message was set
-	errorTime           time.Time        // Time when error message was set
-	downloadsTable      table.Model
-	selectedRow         int
+	currentTab            int
+	inputURL              textinput.Model
+	pageSelect            list.Model
+	outputFileName        textinput.Model
+	selectedPage          int
+	selectedFiles         map[int]struct{} // Tracks selected pages
+	focusedField          int              // 0 for inputURL, 1 for pageSelect, 2 for outputFileName
+	confirmationMessage   string           // Holds the confirmation message
+	errorMessage          string           // Holds the error message (if URL is empty)
+	confirmationTime      time.Time        // Time when confirmation message was set
+	errorTime             time.Time        // Time when error message was set
+	downloadsTable        table.Model
+	selectedRow           int
+	queuesTable           table.Model // Add the queuesTable field
+	editingQueue          *QueueItem  // Holds the queue currently being edited (nil if no queue is being edited)
+	newQueueForm          bool        // Flag to indicate if the form for adding a new queue is open
+	editQueueForm         bool        // Flag to indicate if the form for adding a new queue is open
+	newQueueData          *QueueItem  // Temporarily holds new queue data while filling out the form
+	saveDirInput          textinput.Model
+	maxConcurrentInput    textinput.Model
+	maxBandwidthInput     textinput.Model
+	focusedFieldForQueues int // Use focusedFieldForQueues instead of focusedField
 }
 
 // QueueItem is the custom type to represent a queue
 type QueueItem struct {
-	name string
+	ID              string
+	SaveDir         string
+	MaxConcurrent   string
+	MaxBandwidth    string
+	ActiveStartTime string
+	ActiveEndTime   string
 }
 
 // String implements the list.Item interface
 func (q QueueItem) String() string {
-	return q.name
+	return q.ID
 }
 
 // FilterValue implements the list.Item interface
 func (q QueueItem) FilterValue() string {
-	return q.name
+	return q.ID
 }
 
-// Define styles using Lipgloss
+// Define styles using LipGloss
 var (
 	greenTitleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true).Italic(true)
 	yellowTitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true).Italic(true)
@@ -100,28 +134,45 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.currentTab == tabAddDownload {
 				m.handleEnterPress()
 			}
-		case "esc":
+			if m.currentTab == tabQueues {
+				m.handleNewOrEditQueueFormSubmit()
+			}
+		case "-":
 			if m.currentTab == tabAddDownload {
 				m.focusedField = 0
 			}
-		case "up", "k":
+			if m.currentTab == tabQueues {
+				m.handleCancel()
+			}
+
+		case "up":
 			if m.currentTab == tabAddDownload {
 				m.handleUpArrowForTab1()
 			}
 			if m.currentTab == tabDownloads {
 				m.handleUpArrowForTab2()
 			}
+			if m.currentTab == tabQueues {
+				m.handleUpArrowForTab3()
+			}
 
-		case "down", "j":
+		case "down":
 			if m.currentTab == tabAddDownload {
 				m.handleDownArrowForTab1()
 			}
 			if m.currentTab == tabDownloads {
 				m.handleDownArrowForTab2()
 			}
+			if m.currentTab == tabQueues {
+				m.handleDownArrowForTab3()
+			}
 		case "tab":
 			if m.currentTab == tabAddDownload {
-				m.handleTabKey()
+				m.updateFocusedFieldForTab1()
+			}
+			if m.currentTab == tabQueues {
+				m.focusedFieldForQueues = (m.focusedFieldForQueues + 1) % 3
+				m.updateFocusedFieldForTab3()
 			}
 		case " ":
 			if m.currentTab == tabAddDownload {
@@ -129,212 +180,38 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "d": // Delete selected download
 			if m.currentTab == tabDownloads {
-				m.deleteDownload(m.selectedRow)
+				m.deleteDownload()
 			}
 		case "p": // Pause/Resume selected download
 			if m.currentTab == tabDownloads {
-				m.togglePauseDownload(m.selectedRow)
+				m.togglePauseDownload()
 			}
 		case "r": // Retry selected download if failed
 			if m.currentTab == tabDownloads {
-				m.retryDownload(m.selectedRow)
+				m.retryDownload()
+			}
+		case "n": // Press N to add a new queue
+			if counterForForms == 0 {
+				m.handleSwitchToAddQueueForm()
+			}
+
+		case "e": // Press E to edit a selected queue
+			if counterForForms == 0 {
+				m.handleSwitchToEditQueueForm()
 			}
 		}
 	}
 
-	// Update the text inputs based on focus
-	if m.currentTab == tabAddDownload {
-		if m.focusedField == 0 {
-			m.inputURL, cmd = m.inputURL.Update(msg)
-		} else if m.focusedField == 1 {
-			m.pageSelect, cmd = m.pageSelect.Update(msg)
-		} else if m.focusedField == 2 {
-			m.outputFileName, cmd = m.outputFileName.Update(msg)
-		}
-		// Clear messages if necessary
-		m.clearMessages()
-		// Update the focused field accordingly
-		m.updateFocusedField(msg)
+	m.updateBasedOnInputForTab1(msg, cmd)
+
+	if counterForForms > 1 {
+		m.updateBasedOnInputForTab3(msg, cmd)
+	}
+	if counterForForms == 1 {
+		counterForForms = counterForForms + 1
 	}
 
 	return m, cmd
-}
-
-// Helper functions
-
-func (m *Model) handleTabLeft() {
-	if m.currentTab > 0 {
-		m.currentTab--
-	}
-}
-
-func (m *Model) handleTabRight() {
-	if m.currentTab < tabQueues {
-		m.currentTab++
-	}
-}
-
-func (m *Model) handleEnterPress() {
-	if m.currentTab == tabAddDownload {
-		m.processURLInput()
-	}
-}
-
-func (m *Model) processURLInput() {
-	if m.inputURL.Value() == "" {
-		m.showURLValidationError()
-	} else {
-		m.showDownloadConfirmation()
-	}
-}
-
-func (m *Model) showURLValidationError() {
-	m.errorMessage = "URL is required!"
-	m.confirmationMessage = ""
-	m.errorTime = time.Now()
-
-	m.resetFields()
-	m.focusedField = 0
-	m.inputURL.Focus()
-}
-
-func (m *Model) showDownloadConfirmation() {
-	m.confirmationMessage = "Download has been added!"
-	m.confirmationTime = time.Now()
-
-	m.resetFields()
-	m.focusedField = 0
-	m.inputURL.Focus()
-}
-
-func (m *Model) resetFields() {
-	m.inputURL.SetValue("")
-	m.pageSelect.ResetSelected()
-	m.outputFileName.SetValue("")
-	m.selectedFiles = make(map[int]struct{})
-}
-
-func (m *Model) handleUpArrowForTab1() {
-	if m.focusedField == 1 && m.selectedPage > 0 {
-		m.selectedPage--
-	}
-}
-
-func (m *Model) handleDownArrowForTab1() {
-	if m.focusedField == 1 && m.selectedPage < len(m.pageSelect.Items())-1 {
-		m.selectedPage++
-	}
-}
-
-func (m *Model) handleUpArrowForTab2() {
-	if m.selectedRow > 0 {
-		m.selectedRow--
-	}
-}
-
-func (m *Model) handleDownArrowForTab2() {
-	if m.selectedRow < len(m.downloadsTable.Rows())-1 {
-		m.selectedRow++
-	}
-}
-
-func (m *Model) handleTabKey() {
-	if m.currentTab == tabAddDownload {
-		m.focusedField = (m.focusedField + 1) % 3
-		m.updateFieldFocus()
-	}
-}
-
-func (m *Model) handleSpaceKey() {
-	if m.currentTab == tabAddDownload && m.focusedField == 1 {
-		if _, exists := m.selectedFiles[m.selectedPage]; exists {
-			delete(m.selectedFiles, m.selectedPage)
-		} else {
-			m.selectedFiles[m.selectedPage] = struct{}{}
-		}
-	}
-}
-
-func (m *Model) updateFieldFocus() {
-	if m.focusedField == 0 {
-		m.inputURL.Focus()
-		m.outputFileName.Blur()
-	} else if m.focusedField == 1 {
-		m.inputURL.Blur()
-		m.outputFileName.Blur()
-	} else if m.focusedField == 2 {
-		m.outputFileName.Focus()
-		m.inputURL.Blur()
-	}
-}
-
-func (m *Model) clearMessages() {
-	if m.errorMessage != "" && time.Since(m.errorTime) > 3*time.Second {
-		m.errorMessage = ""
-	}
-
-	if m.confirmationMessage != "" && time.Since(m.confirmationTime) > 3*time.Second {
-		m.confirmationMessage = ""
-	}
-}
-
-// Add a method to handle Pause/Resume action
-func (m *Model) togglePauseDownload(index int) {
-	if index >= 0 && index < len(m.downloadsTable.Rows()) {
-		// Check current state of the download
-		state := m.downloadsTable.Rows()[index][2]
-
-		if state == "Downloading" {
-			// Pause the download
-			m.downloadsTable.Rows()[index][2] = "Paused" // Update the state to "Paused"
-		} else if state == "Paused" {
-			// Resume the download
-			m.downloadsTable.Rows()[index][2] = "Downloading" // Update the state to "Downloading"
-		}
-	}
-}
-
-// Modify the deleteDownload method to delete the selected row
-func (m *Model) deleteDownload(index int) {
-	if index >= 0 && index < len(m.downloadsTable.Rows()) {
-		// Remove the row from the table by slicing the rows
-		newRows := append(m.downloadsTable.Rows()[:index], m.downloadsTable.Rows()[index+1:]...)
-
-		// Update the downloadsTable with the new rows
-		m.downloadsTable = table.New(
-			table.WithColumns(downloadColumns), // Keep the existing columns
-			table.WithRows(newRows),            // Set the new rows
-		)
-
-		// Adjust the selected row to prevent out of bounds error if the last row is deleted
-		if m.selectedRow >= len(newRows) {
-			m.selectedRow = len(newRows) - 1
-		}
-	}
-}
-
-// Add a method to handle Retry action (only if the state is "Failed")
-func (m *Model) retryDownload(index int) {
-	if index >= 0 && index < len(m.downloadsTable.Rows()) {
-		// Check the state of the selected row
-		state := m.downloadsTable.Rows()[index][2]
-
-		if state == "Failed" {
-			// Retry the download
-			m.downloadsTable.Rows()[index][2] = "Retrying" // Update status to "Retrying"
-			// Optionally, trigger actual retry logic here (e.g., retry network request)
-		}
-	}
-}
-
-func (m *Model) updateFocusedField(msg tea.Msg) {
-	if m.focusedField == 0 {
-		m.inputURL.Update(msg)
-	} else if m.focusedField == 1 {
-		m.pageSelect.Update(msg)
-	} else if m.focusedField == 2 {
-		m.outputFileName.Update(msg)
-	}
 }
 
 func (m *Model) View() string {
@@ -367,10 +244,64 @@ func (m *Model) View() string {
 	case tabAddDownload:
 		content = m.renderAddDownloadTab(tabsRow)
 	case tabDownloads:
-		content = m.renderDownloadListTab(tabsRow) // Use the new function to render the table
+		content = m.renderDownloadListTab(tabsRow)
+	case tabQueues:
+		content = m.renderQueuesTab(tabsRow) // Ensure this renders when in the Queues tab
 	}
 
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).Render(content)
+}
+func (m *Model) renderQueuesTab(tabsRow string) string {
+	if m.newQueueForm {
+		return m.renderQueueForm() // Show the form if the user is adding/editing a queue
+	}
+	if m.editQueueForm {
+		return m.renderQueueFormForEdit()
+	}
+
+	// Custom styles for the table
+	columns := queueColumns
+	tableStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true).BorderForeground(lipgloss.Color("5")).Padding(1)
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("4"))                           // Header color
+	rowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))                                         // Row color
+	alternateRowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))                                // Alternate row color
+	selectedRowStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("0")) // Highlighted row
+
+	content := fmt.Sprintf(
+		"%s\n\n",
+		tabsRow,
+	)
+
+	// Render the headers
+	tableContent := ""
+	for _, column := range columns {
+		tableContent += headerStyle.Render(fmt.Sprintf("%-*s", column.Width, column.Title))
+	}
+	tableContent += "\n"
+
+	// Render the rows with their states
+	for rowIndex, row := range m.queuesTable.Rows() {
+		var styledRow string
+		for colIndex, cell := range row {
+			// Highlight the selected row
+			if rowIndex == m.selectedRow {
+				styledRow += selectedRowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
+			} else {
+				// Alternate row colors for better readability
+				if rowIndex%2 == 0 {
+					styledRow += rowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
+				} else {
+					styledRow += alternateRowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
+				}
+			}
+		}
+		tableContent += styledRow + "\n"
+	}
+
+	// Wrap the table content in a box style and add it to the final view
+	content += tableStyle.Render(tableContent)
+
+	return content
 }
 
 func (m *Model) renderAddDownloadTab(tabsRow string) string {
@@ -431,9 +362,8 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 	selectedRowStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("0")) // Highlighted row
 
 	content := fmt.Sprintf(
-		"%s\n\n%s\n\n",
+		"%s\n\n",
 		tabsRow,
-		tabActiveStyle.Render("Downloads List"),
 	)
 
 	// Render the headers
@@ -468,15 +398,57 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 	return content
 }
 
+// Render the form for adding or editing a queue
+func (m *Model) renderQueueForm() string {
+	var content string
+
+	// Display the form header
+	content += "New Queue\n\n"
+
+	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
+	content += fmt.Sprintf(
+		"Save Directory: %s\nMax Concurrent: %s\nMax Bandwidth: %s\n\n",
+		m.saveDirInput.View(),
+		m.maxConcurrentInput.View(),
+		m.maxBandwidthInput.View(),
+	)
+
+	// Add instructions
+	content += "\nPress Enter to submit, ESC to cancel.\n"
+
+	return content
+}
+
+// Render the form for adding or editing a queue
+func (m *Model) renderQueueFormForEdit() string {
+	var content string
+
+	// Display the form header
+	content += "Edit Queue\n\n"
+
+	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
+	content += fmt.Sprintf(
+		"Save Directory: %s\nMax Concurrent: %s\nMax Bandwidth: %s\n\n",
+		m.saveDirInput.View(),
+		m.maxConcurrentInput.View(),
+		m.maxBandwidthInput.View(),
+	)
+
+	// Add instructions
+	content += "\nPress Enter to submit, ESC to cancel.\n"
+
+	return content
+}
+
 func NewModel() *Model {
 	ti := textinput.New()
 	ti.Placeholder = "Enter Download URL..."
 	ti.Focus()
 
 	pageSelect := list.New([]list.Item{
-		QueueItem{name: "Page 1"},
-		QueueItem{name: "Page 2"},
-		QueueItem{name: "Page 3"},
+		QueueItem{ID: "Page 1"},
+		QueueItem{ID: "Page 2"},
+		QueueItem{ID: "Page 3"},
 	}, list.NewDefaultDelegate(), 0, 0)
 
 	outputFileName := textinput.New()
@@ -489,18 +461,37 @@ func NewModel() *Model {
 		table.WithRows(downloadRows),       // Specify rows
 	)
 
+	queuesTable := table.New(
+		table.WithColumns(queueColumns), // Specify columns with WithColumns
+		table.WithRows(queueRows),       // Specify rows
+	)
+
+	saveDirInput := textinput.New()
+	saveDirInput.Placeholder = "Enter Save Directory"
+
+	maxConcurrentInput := textinput.New()
+	maxConcurrentInput.Placeholder = "Enter Max Concurrent"
+
+	maxBandwidthInput := textinput.New()
+	maxBandwidthInput.Placeholder = "Enter Max Bandwidth"
+
 	return &Model{
-		currentTab:          tabAddDownload,
-		inputURL:            ti,
-		pageSelect:          pageSelect,
-		outputFileName:      outputFileName,
-		selectedPage:        0,
-		selectedFiles:       make(map[int]struct{}),
-		focusedField:        0,
-		confirmationMessage: "",
-		errorMessage:        "",
-		confirmationTime:    time.Time{},
-		errorTime:           time.Time{},
-		downloadsTable:      downloadsTable, // Set the Downloads table
+		currentTab:            tabAddDownload,
+		inputURL:              ti,
+		pageSelect:            pageSelect,
+		outputFileName:        outputFileName,
+		selectedPage:          0,
+		selectedFiles:         make(map[int]struct{}),
+		focusedField:          0,
+		confirmationMessage:   "",
+		errorMessage:          "",
+		confirmationTime:      time.Time{},
+		errorTime:             time.Time{},
+		downloadsTable:        downloadsTable, // Set the Downloads table
+		queuesTable:           queuesTable,    // Set the Queues table
+		saveDirInput:          saveDirInput,
+		maxConcurrentInput:    maxConcurrentInput,
+		maxBandwidthInput:     maxBandwidthInput,
+		focusedFieldForQueues: 0, // Focus on Save Directory initially
 	}
 }
