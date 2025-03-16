@@ -2,12 +2,16 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/sajjad-mobe/gdm/internal/manager"
+
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"time"
 )
 
 // Global Variables
@@ -23,12 +27,12 @@ var downloadColumns = []table.Column{
 }
 
 // Sample rows for the Downloads table
-var downloadRows = []table.Row{
-	{"1", "https://example.com/file1.zip", "Downloading", "50%", "1.2 MB/s"},
-	{"2", "https://example.com/file2.zip", "Completed", "100%", "N/A"},
-	{"3", "https://example.com/file3.zip", "Paused", "20%", "800 KB/s"},
-	{"4", "https://example.com/file4.zip", "Failed", "N/A", "N/A"},
-}
+// var downloadRows = []table.Row{
+// 	{"1", "https://example.com/file1.zip", "Downloading", "50%", "1.2 MB/s"},
+// 	{"2", "https://example.com/file2.zip", "Completed", "100%", "N/A"},
+// 	{"3", "https://example.com/file3.zip", "Paused", "20%", "800 KB/s"},
+// 	{"4", "https://example.com/file4.zip", "Failed", "N/A", "N/A"},
+// }
 
 // Define your table columns for the Queues tab
 var queueColumns = []table.Column{
@@ -41,11 +45,11 @@ var queueColumns = []table.Column{
 }
 
 // Sample rows for the Queues table
-var queueRows = []table.Row{
-	{"1", "/path/to/dir1", "5", "100 MB/s", "08:00 AM", "06:00 PM"},
-	{"2", "/path/to/dir2", "3", "50 MB/s", "09:00 AM", "05:00 PM"},
-	{"3", "/path/to/dir3", "2", "30 MB/s", "10:00 AM", "04:00 PM"},
-}
+// var queueRows = []table.Row{
+// 	{"1", "/path/to/dir1", "5", "100 MB/s", "08:00 AM", "06:00 PM"},
+// 	{"2", "/path/to/dir2", "3", "50 MB/s", "09:00 AM", "05:00 PM"},
+// 	{"3", "/path/to/dir3", "2", "30 MB/s", "10:00 AM", "04:00 PM"},
+// }
 
 // Tabs constants
 const (
@@ -57,49 +61,43 @@ const (
 // Model for the table content in Downloads tab
 type Model struct {
 	// Existing fields
-	currentTab            int
-	inputURL              textinput.Model
-	pageSelect            list.Model
-	outputFileName        textinput.Model
-	selectedPage          int
-	selectedFiles         map[int]struct{} // Tracks selected pages
-	focusedField          int              // 0 for inputURL, 1 for pageSelect, 2 for outputFileName
-	confirmationMessage   string           // Holds the confirmation message
-	errorMessage          string           // Holds the error message (if URL is empty)
-	confirmationTime      time.Time        // Time when confirmation message was set
-	errorTime             time.Time        // Time when error message was set
-	downloadsTable        table.Model
-	selectedRow           int
-	queuesTable           table.Model // Add the queuesTable field
-	editingQueue          *QueueItem  // Holds the queue currently being edited (nil if no queue is being edited)
-	newQueueForm          bool        // Flag to indicate if the form for adding a new queue is open
-	editQueueForm         bool        // Flag to indicate if the form for adding a new queue is open
-	newQueueData          *QueueItem  // Temporarily holds new queue data while filling out the form
+	currentTab          int
+	inputURL            textinput.Model
+	pageSelect          list.Model
+	outputFileName      textinput.Model
+	selectedPage        int
+	selectedFiles       map[int]struct{} // Tracks selected pages
+	focusedField        int              // 0 for inputURL, 1 for pageSelect, 2 for outputFileName
+	confirmationMessage string           // Holds the confirmation message
+	errorMessage        string           // Holds the error message (if URL is empty)
+	confirmationTime    time.Time        // Time when confirmation message was set
+	errorTime           time.Time        // Time when error message was set
+	downloadsTable      table.Model
+	selectedRow         int
+	queuesTable         table.Model // Add the queuesTable field
+	// editingQueue          *manager.Queue // Holds the queue currently being edited (nil if no queue is being edited)
+	newQueueForm          bool           // Flag to indicate if the form for adding a new queue is open
+	editQueueForm         bool           // Flag to indicate if the form for adding a new queue is open
+	newQueueData          *manager.Queue // Temporarily holds new queue data while filling out the form
 	saveDirInput          textinput.Model
 	maxConcurrentInput    textinput.Model
 	maxBandwidthInput     textinput.Model
 	focusedFieldForQueues int // Use focusedFieldForQueues instead of focusedField
+	queues                map[string]*manager.Queue
+	downloads             map[string]*manager.Download
+
+	downloadmanager *manager.DownloadManager
 }
 
 // QueueItem is the custom type to represent a queue
-type QueueItem struct {
-	ID              string
-	SaveDir         string
-	MaxConcurrent   string
-	MaxBandwidth    string
-	ActiveStartTime string
-	ActiveEndTime   string
-}
-
-// String implements the list.Item interface
-func (q QueueItem) String() string {
-	return q.ID
-}
-
-// FilterValue implements the list.Item interface
-func (q QueueItem) FilterValue() string {
-	return q.ID
-}
+// type QueueItem struct {
+// 	ID              string
+// 	SaveDir         string
+// 	MaxConcurrent   string
+// 	MaxBandwidth    string
+// 	ActiveStartTime string
+// 	ActiveEndTime   string
+// }
 
 // Define styles using LipGloss
 var (
@@ -114,14 +112,27 @@ var (
 
 // Init initializes the UI
 func (m *Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(tickToUpdateDownloadTable())
+	// return textinput.Blink
 }
+
+func tickToUpdateDownloadTable() tea.Cmd {
+	return tea.Tick(time.Second/10, func(t time.Time) tea.Msg { return updateDownloadMsg{} })
+}
+
+type updateDownloadMsg struct{}
 
 // Update method to handle new key presses
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+
+	case updateDownloadMsg:
+		if m.currentTab == 1 {
+			m.updateDownloadTable()
+		}
+		return m, tickToUpdateDownloadTable()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "*":
@@ -323,8 +334,8 @@ func (m *Model) renderAddDownloadTab(tabsRow string) string {
 		if _, selected := m.selectedFiles[i]; selected {
 			checkbox = "[" + checkmark + "]"
 		}
-		if queueItem, ok := item.(QueueItem); ok {
-			content += fmt.Sprintf("%s %s %s\n", cursor, checkbox, queueItem.String())
+		if queueItem, ok := item.(manager.Queue); ok {
+			content += fmt.Sprintf("%s %s %s\n", cursor, checkbox, strconv.Itoa(queueItem.ID))
 		}
 	}
 
@@ -424,7 +435,7 @@ func (m *Model) renderQueueFormForEdit() string {
 	var content string
 
 	// Display the form header
-	content += "Edit Queue\n\n"
+	content += fmt.Sprintf("Edit Queue %d\n\n", m.selectedRow)
 
 	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
 	content += fmt.Sprintf(
@@ -441,29 +452,69 @@ func (m *Model) renderQueueFormForEdit() string {
 }
 
 func NewModel() *Model {
+	manager.InitializeDB()
+	MaxParts := 10  // Maximum number of parts for one download
+	PartSize := 100 // create new part downloader per each PartSize mb
+	downloadmanager := manager.NewManager(MaxParts, PartSize)
+
 	ti := textinput.New()
 	ti.Placeholder = "Enter Download URL..."
 	ti.Focus()
 
 	pageSelect := list.New([]list.Item{
-		QueueItem{ID: "Page 1"},
-		QueueItem{ID: "Page 2"},
-		QueueItem{ID: "Page 3"},
+		// QueueItem{ID: "Page 1"},
+		// QueueItem{ID: "Page 2"},
+		// QueueItem{ID: "Page 3"},
 	}, list.NewDefaultDelegate(), 0, 0)
 
 	outputFileName := textinput.New()
 	outputFileName.Placeholder = "Optional output file name"
 	outputFileName.Blur()
 
+	var queues []manager.Queue
+	if err := manager.GetAll(&queues); err != nil {
+		fmt.Printf("failed to get queues: %v", err)
+	}
+	queueRows := []table.Row{}
+	queuesMap := make(map[string]*manager.Queue)
+	for _, row := range queues {
+		downloadmanager.AddQueue(&row)
+		queuesMap[strconv.Itoa(row.ID)] = &row
+		queueRows = append(queueRows, table.Row{
+			strconv.Itoa(row.ID),
+			row.SaveDir,
+			strconv.Itoa(row.MaxConcurrentDownloads),
+			strconv.Itoa(row.MaxBandwidth),
+			row.ActiveStartTime,
+			row.ActiveEndTime,
+		})
+	}
+	queuesTable := table.New(
+		table.WithColumns(queueColumns), // Specify columns with WithColumns
+		table.WithRows(queueRows),       // Specify rows
+	)
+
+	var downloads []manager.Download
+	if err := manager.GetAll(&downloads); err != nil {
+		fmt.Printf("failed to get downloads: %v", err)
+	}
+	downloadRows := []table.Row{}
+	downloadsMap := make(map[string]*manager.Download)
+	for _, row := range downloads {
+		downloadmanager.AddDownload(&row)
+		downloadsMap[strconv.Itoa(row.ID)] = &row
+		downloadRows = append(downloadRows, table.Row{
+			strconv.Itoa(row.ID),
+			row.URL,
+			row.Status,
+			"N/A",
+			"N/A",
+		})
+	}
 	// Initialize the Downloads table using WithColumns option
 	downloadsTable := table.New(
 		table.WithColumns(downloadColumns), // Specify columns with WithColumns
 		table.WithRows(downloadRows),       // Specify rows
-	)
-
-	queuesTable := table.New(
-		table.WithColumns(queueColumns), // Specify columns with WithColumns
-		table.WithRows(queueRows),       // Specify rows
 	)
 
 	saveDirInput := textinput.New()
@@ -493,5 +544,21 @@ func NewModel() *Model {
 		maxConcurrentInput:    maxConcurrentInput,
 		maxBandwidthInput:     maxBandwidthInput,
 		focusedFieldForQueues: 0, // Focus on Save Directory initially
+		queues:                queuesMap,
+		downloads:             downloadsMap,
+		downloadmanager:       downloadmanager,
+	}
+}
+
+func (m *Model) updateDownloadTable() {
+	downloadRows := m.downloadsTable.Rows()
+	for index, row := range downloadRows {
+		download := m.downloads[row[0]]
+		downloadRows[index][3] = download.Status
+
+		downloadRows[index][4] = strconv.Itoa(download.GetSpeed())
+
+		downloadRows[index][3] = strconv.Itoa(download.GetProgress())
+
 	}
 }

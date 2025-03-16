@@ -28,11 +28,12 @@ func InitializeDB() {
 	fmt.Println("Database path:", dbPath)
 	db := sqlite.Open(dbPath)
 
-	database, err := gorm.Open(db, &gorm.Config{})
+	gormDB, err := gorm.Open(db, &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to open database:", err)
 		return
 	}
+	SetCustomDB(gormDB)
 	err = database.AutoMigrate(&Queue{}, &Download{})
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
@@ -67,4 +68,31 @@ func ResetAll(tempDir string) error {
 		}
 		return nil
 	})
+}
+
+func Create(model interface{}) error {
+	return GetDB().Create(model).Error
+}
+
+func GetAll(model interface{}) error {
+	return GetDB().Find(model).Error
+}
+func GetQueueBy(field string, value interface{}) ([]Queue, error) {
+	var queues []Queue
+	if err := GetDB().Where(field+"= ?", value).Find(&queues).Error; err != nil {
+		return nil, err
+	}
+	return queues, nil
+}
+
+func GetDownloadBy(field string, value interface{}) ([]Download, error) {
+	var downloads []Download
+	if err := GetDB().Preload("Queue").Where(field+"= ?", value).Find(&downloads).Error; err != nil {
+		return nil, err
+	}
+	return downloads, nil
+}
+
+func Save(model interface{}) error {
+	return GetDB().Save(model).Error
 }

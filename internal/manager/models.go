@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"strconv"
 	"sync"
 	"time"
 )
@@ -10,7 +11,7 @@ type Queue struct {
 	Downloads                 []*Download          `gorm:"-"`
 	tokenBucket               chan struct{}        `gorm:"-"`
 	ticker                    *time.Ticker         `gorm:"-"`
-	ID                        uint                 `gorm:"primaryKey" json:"id"`
+	ID                        int                  `gorm:"primaryKey" json:"id"`
 	IsActive                  bool                 `gorm:"default:false" json:"is_active"`
 	SaveDir                   string               `json:"save_dir"`
 	MaxConcurrentDownloads    int                  `gorm:"default:5" json:"max_concurrent_downloads"`
@@ -21,11 +22,15 @@ type Queue struct {
 	MaxRetries                int                  `gorm:"default:3" json:"max_retries"`
 }
 
+func (q Queue) FilterValue() string {
+	return strconv.Itoa(q.ID)
+}
+
 type Download struct {
 	Temps           *DownloadTemps    `gorm:"-"`
 	PartDownloaders []*PartDownloader `gorm:"-"`
-	ID              uint              `gorm:"primaryKey" json:"id"`
-	QueueID         uint              `gorm:"not null" json:"queue_id"`
+	ID              int               `gorm:"primaryKey" json:"id"`
+	QueueID         int               `gorm:"not null" json:"queue_id"`
 	IsActive        bool              `gorm:"default:false" json:"is_active"`
 	Status          string            `json:"status"`
 	TotalSize       int64             `gorm:"default:0" json:"total_size"`
@@ -60,29 +65,13 @@ type DownloadManager struct {
 	TempFolder string
 }
 
-func Create(model interface{}) error {
-	return GetDB().Create(model).Error
-}
-
-func GetAll(model interface{}) error {
-	return GetDB().Find(model).Error
-}
-func GetQueueBy(field string, value interface{}) ([]Queue, error) {
-	var queues []Queue
-	if err := GetDB().Where(field+"= ?", value).Find(&queues).Error; err != nil {
-		return nil, err
+func (d *Download) GetSpeed() int {
+	totalKB := 0
+	for _, p := range d.PartDownloaders {
+		totalKB += int(p.Speed / 1024)
 	}
-	return queues, nil
+	return totalKB
 }
-
-func GetDownloadBy(field string, value interface{}) ([]Download, error) {
-	var downloads []Download
-	if err := GetDB().Preload("Queue").Where(field+"= ?", value).Find(&downloads).Error; err != nil {
-		return nil, err
-	}
-	return downloads, nil
-}
-
-func Save(model interface{}) error {
-	return GetDB().Save(model).Error
+func (d *Download) GetProgress() int {
+	return int(d.Temps.TotalDownloaded / d.TotalSize)
 }

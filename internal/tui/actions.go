@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"time"
+	"github.com/sajjad-mobe/gdm/internal/manager"
 )
 
 // Helper functions
@@ -62,11 +66,12 @@ func (m *Model) resetFieldsForTab1() {
 	m.selectedFiles = make(map[int]struct{})
 }
 
-func (m *Model) resetFieldsForTab3() {
-	m.saveDirInput.SetValue("")
-	m.maxConcurrentInput.SetValue("")
-	m.maxBandwidthInput.SetValue("")
-}
+// unused
+// func (m *Model) resetFieldsForTab3() {
+// 	m.saveDirInput.SetValue("")
+// 	m.maxConcurrentInput.SetValue("")
+// 	m.maxBandwidthInput.SetValue("")
+// }
 
 func (m *Model) handleUpArrowForTab1() {
 	if m.focusedField == 1 && m.selectedPage > 0 {
@@ -209,32 +214,45 @@ func (m *Model) updateFocusedField(msg tea.Msg) {
 	}
 }
 
-func (m *Model) updateFocusedFieldForQueue(msg tea.Msg) {
-	if m.focusedFieldForQueues == 0 {
-		m.saveDirInput.Update(msg)
-	} else if m.focusedFieldForQueues == 1 {
-		m.maxConcurrentInput.Update(msg)
-	} else if m.focusedFieldForQueues == 2 {
-		m.maxBandwidthInput.Update(msg)
-	}
-}
+// unused
+// func (m *Model) updateFocusedFieldForQueue(msg tea.Msg) {
+// 	if m.focusedFieldForQueues == 0 {
+// 		m.saveDirInput.Update(msg)
+// 	} else if m.focusedFieldForQueues == 1 {
+// 		m.maxConcurrentInput.Update(msg)
+// 	} else if m.focusedFieldForQueues == 2 {
+// 		m.maxBandwidthInput.Update(msg)
+// 	}
+// }
 
 // Handle the submission of a new queue form
 func (m *Model) handleNewOrEditQueueFormSubmit() {
 	if m.newQueueForm || m.editQueueForm {
 		// Create a new QueueItem with the data entered in the fields
-		newQueue := QueueItem{
-			SaveDir:       m.saveDirInput.Value(),
-			MaxConcurrent: m.maxConcurrentInput.Value(),
-			MaxBandwidth:  m.maxBandwidthInput.Value(),
+		MaxConcurrentDownloads, err := strconv.Atoi(m.maxConcurrentInput.Value())
+		if err != nil {
+			// show error
+			fmt.Println("Error:", err)
+			return
+		}
+		MaxBandwidth, err := strconv.Atoi(m.maxBandwidthInput.Value())
+		if err != nil {
+			// show error
+			fmt.Println("Error:", err)
+			return
+		}
+		newQueue := manager.Queue{
+			SaveDir:                m.saveDirInput.Value(),
+			MaxConcurrentDownloads: MaxConcurrentDownloads,
+			MaxBandwidth:           MaxBandwidth,
 		}
 
-		if m.editQueueForm == true {
+		if m.editQueueForm {
 			// Editing an existing queue
-			m.editQueue(m.selectedRow, newQueue)
+			m.editQueue(m.selectedRow, &newQueue)
 		} else {
 			// Adding a new queue
-			m.addNewQueue(newQueue)
+			m.addNewQueue(&newQueue)
 		}
 
 		// Reset the form after submission
@@ -253,12 +271,16 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 }
 
 // Add a new queue
-func (m *Model) addNewQueue(queue QueueItem) {
+func (m *Model) addNewQueue(queue *manager.Queue) {
+	if err := manager.Create(&queue); err != nil {
+		//	show error
+		fmt.Printf("failed to create queue: %v", err)
+	}
 	newRow := table.Row{
-		queue.ID,
+		strconv.Itoa(queue.ID),
+		strconv.Itoa(queue.MaxConcurrentDownloads),
+		strconv.Itoa(queue.MaxBandwidth),
 		queue.SaveDir,
-		queue.MaxConcurrent,
-		queue.MaxBandwidth,
 		queue.ActiveStartTime,
 		queue.ActiveEndTime,
 	}
@@ -271,15 +293,15 @@ func (m *Model) addNewQueue(queue QueueItem) {
 }
 
 // Edit an existing queue
-func (m *Model) editQueue(index int, queue QueueItem) {
+func (m *Model) editQueue(index int, queue *manager.Queue) {
 	if index >= 0 && index < len(m.queuesTable.Rows()) {
 		oldQueue := m.queuesTable.Rows()[index]
 		// Update the selected queue with new values
 		m.queuesTable.Rows()[index] = table.Row{
 			oldQueue[0],
 			queue.SaveDir,
-			queue.MaxConcurrent,
-			queue.MaxBandwidth,
+			strconv.Itoa(queue.MaxConcurrentDownloads),
+			strconv.Itoa(queue.MaxBandwidth),
 			oldQueue[4],
 			oldQueue[5],
 		}
@@ -332,7 +354,7 @@ func (m *Model) handleSwitchToAddQueueForm() {
 		if !m.newQueueForm && !m.editQueueForm {
 			counterForForms = counterForForms + 1
 			m.newQueueForm = true
-			m.newQueueData = &QueueItem{}
+			m.newQueueData = &manager.Queue{}
 			m.editQueueForm = false
 			m.updateFocusedFieldForTab3()
 		}
@@ -343,31 +365,26 @@ func (m *Model) handleSwitchToEditQueueForm() {
 	if m.currentTab == tabQueues && m.selectedRow >= 0 {
 		if !m.newQueueForm && !m.editQueueForm {
 			counterForForms = counterForForms + 1
-			queue := m.queuesTable.Rows()[m.selectedRow]
+
 			m.editQueueForm = true
 			m.newQueueForm = false
-			m.newQueueData = &QueueItem{
-				ID:              queue[0],
-				SaveDir:         queue[1],
-				MaxConcurrent:   queue[2],
-				MaxBandwidth:    queue[3],
-				ActiveStartTime: queue[4],
-				ActiveEndTime:   queue[5],
-			}
+			queueID := m.queuesTable.Rows()[m.selectedRow][0]
+			m.newQueueData = m.queues[queueID]
+			// queue[0]
 			m.updateFocusedFieldForTab3()
 		}
 	}
 }
 
-func (m *Model) updateBasedOnInputForTab1(msg tea.Msg, cmd tea.Cmd) {
+func (m *Model) updateBasedOnInputForTab1(msg tea.Msg, _ tea.Cmd) {
 	// Update the text inputs based on focus
 	if m.currentTab == tabAddDownload {
 		if m.focusedField == 0 {
-			m.inputURL, cmd = m.inputURL.Update(msg)
+			m.inputURL, _ = m.inputURL.Update(msg)
 		} else if m.focusedField == 1 {
-			m.pageSelect, cmd = m.pageSelect.Update(msg)
+			m.pageSelect, _ = m.pageSelect.Update(msg)
 		} else if m.focusedField == 2 {
-			m.outputFileName, cmd = m.outputFileName.Update(msg)
+			m.outputFileName, _ = m.outputFileName.Update(msg)
 		}
 		// Clear messages if necessary
 		m.clearMessages()
@@ -376,16 +393,16 @@ func (m *Model) updateBasedOnInputForTab1(msg tea.Msg, cmd tea.Cmd) {
 	}
 }
 
-func (m *Model) updateBasedOnInputForTab3(msg tea.Msg, cmd tea.Cmd) {
+func (m *Model) updateBasedOnInputForTab3(msg tea.Msg, _ tea.Cmd) {
 	if m.newQueueForm || m.editQueueForm {
 		counterForForms = counterForForms + 1
 		switch m.focusedFieldForQueues {
 		case 0:
-			m.saveDirInput, cmd = m.saveDirInput.Update(msg)
+			m.saveDirInput, _ = m.saveDirInput.Update(msg)
 		case 1:
-			m.maxConcurrentInput, cmd = m.maxConcurrentInput.Update(msg)
+			m.maxConcurrentInput, _ = m.maxConcurrentInput.Update(msg)
 		case 2:
-			m.maxBandwidthInput, cmd = m.maxBandwidthInput.Update(msg)
+			m.maxBandwidthInput, _ = m.maxBandwidthInput.Update(msg)
 		}
 		m.updateFocusedFieldForTab1()
 	}

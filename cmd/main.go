@@ -5,11 +5,16 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sajjad-mobe/gdm/internal/manager"
 	"github.com/sajjad-mobe/gdm/internal/tui"
 )
 
 func main() {
 	// Initialize the program with a pointer to Model
+	manager.InitializeDB()
+	db := manager.GetDB()
+	fmt.Println(db)
+
 	p := tea.NewProgram(tui.NewModel()) // Now it's fine to use it like this
 	if _, err := p.Run(); err != nil {
 		_, err := fmt.Fprintf(os.Stderr, "Error starting TUI: %v\n", err)
