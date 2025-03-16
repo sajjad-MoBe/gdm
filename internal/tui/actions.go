@@ -61,7 +61,7 @@ func (m *Model) showDownloadConfirmation() {
 
 func (m *Model) resetFieldsForTab1() {
 	m.inputURL.SetValue("")
-	m.pageSelect.ResetSelected()
+	m.queueSelect.ResetSelected()
 	m.outputFileName.SetValue("")
 	m.selectedFiles = make(map[int]struct{})
 }
@@ -80,7 +80,7 @@ func (m *Model) handleUpArrowForTab1() {
 }
 
 func (m *Model) handleDownArrowForTab1() {
-	if m.focusedField == 1 && m.selectedPage < len(m.pageSelect.Items())-1 {
+	if m.focusedField == 1 && m.selectedPage < len(m.queueSelect.Items())-1 {
 		m.selectedPage++
 	}
 }
@@ -208,7 +208,7 @@ func (m *Model) updateFocusedField(msg tea.Msg) {
 	if m.focusedField == 0 {
 		m.inputURL.Update(msg)
 	} else if m.focusedField == 1 {
-		m.pageSelect.Update(msg)
+		m.queueSelect.Update(msg)
 	} else if m.focusedField == 2 {
 		m.outputFileName.Update(msg)
 	}
@@ -382,7 +382,7 @@ func (m *Model) updateBasedOnInputForTab1(msg tea.Msg, _ tea.Cmd) {
 		if m.focusedField == 0 {
 			m.inputURL, _ = m.inputURL.Update(msg)
 		} else if m.focusedField == 1 {
-			m.pageSelect, _ = m.pageSelect.Update(msg)
+			m.queueSelect, _ = m.queueSelect.Update(msg)
 		} else if m.focusedField == 2 {
 			m.outputFileName, _ = m.outputFileName.Update(msg)
 		}

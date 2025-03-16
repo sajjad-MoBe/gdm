@@ -63,11 +63,11 @@ type Model struct {
 	// Existing fields
 	currentTab          int
 	inputURL            textinput.Model
-	pageSelect          list.Model
+	queueSelect         list.Model
 	outputFileName      textinput.Model
 	selectedPage        int
 	selectedFiles       map[int]struct{} // Tracks selected pages
-	focusedField        int              // 0 for inputURL, 1 for pageSelect, 2 for outputFileName
+	focusedField        int              // 0 for inputURL, 1 for queueSelect, 2 for outputFileName
 	confirmationMessage string           // Holds the confirmation message
 	errorMessage        string           // Holds the error message (if URL is empty)
 	confirmationTime    time.Time        // Time when confirmation message was set
@@ -321,10 +321,10 @@ func (m *Model) renderAddDownloadTab(tabsRow string) string {
 		tabsRow,
 		greenTitleStyle.Render("File Address:"),
 		cursorStyle.Render("> ")+m.inputURL.View(),
-		greenTitleStyle.Render("Page Selection:"),
+		greenTitleStyle.Render("Queue Selection:"),
 	)
 
-	for i, item := range m.pageSelect.Items() {
+	for i, item := range m.queueSelect.Items() {
 		cursor := " "
 		checkbox := "[ ]"
 
@@ -461,12 +461,6 @@ func NewModel() *Model {
 	ti.Placeholder = "Enter Download URL..."
 	ti.Focus()
 
-	pageSelect := list.New([]list.Item{
-		// QueueItem{ID: "Page 1"},
-		// QueueItem{ID: "Page 2"},
-		// QueueItem{ID: "Page 3"},
-	}, list.NewDefaultDelegate(), 0, 0)
-
 	outputFileName := textinput.New()
 	outputFileName.Placeholder = "Optional output file name"
 	outputFileName.Blur()
@@ -475,9 +469,11 @@ func NewModel() *Model {
 	if err := manager.GetAll(&queues); err != nil {
 		fmt.Printf("failed to get queues: %v", err)
 	}
+	var queuesList []list.Item
 	queueRows := []table.Row{}
 	queuesMap := make(map[string]*manager.Queue)
 	for _, row := range queues {
+		queuesList = append(queuesList, row)
 		downloadmanager.AddQueue(&row)
 		queuesMap[strconv.Itoa(row.ID)] = &row
 		queueRows = append(queueRows, table.Row{
@@ -493,6 +489,7 @@ func NewModel() *Model {
 		table.WithColumns(queueColumns), // Specify columns with WithColumns
 		table.WithRows(queueRows),       // Specify rows
 	)
+	queueSelect := list.New(queuesList, list.NewDefaultDelegate(), 0, 0)
 
 	var downloads []manager.Download
 	if err := manager.GetAll(&downloads); err != nil {
@@ -529,7 +526,7 @@ func NewModel() *Model {
 	return &Model{
 		currentTab:            tabAddDownload,
 		inputURL:              ti,
-		pageSelect:            pageSelect,
+		queueSelect:           queueSelect,
 		outputFileName:        outputFileName,
 		selectedPage:          0,
 		selectedFiles:         make(map[int]struct{}),
