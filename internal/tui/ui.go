@@ -608,7 +608,7 @@ func (m *Model) updateDownloadTable() {
 			} else {
 				row[4] = strconv.Itoa(download.GetSpeed()) + "Kb/s"
 			}
-			row[4] = strconv.Itoa(download.GetSpeed())
+
 		}
 		downloadRows = append(downloadRows, row)
 	}
