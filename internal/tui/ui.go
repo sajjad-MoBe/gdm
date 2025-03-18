@@ -61,20 +61,19 @@ const (
 // Model for the table content in Downloads tab
 type Model struct {
 	// Existing fields
-	currentTab          int
-	inputURL            textinput.Model
-	queueSelect         list.Model
-	outputFileName      textinput.Model
-	selectedPage        int
-	selectedFiles       map[int]struct{} // Tracks selected pages
-	focusedField        int              // 0 for inputURL, 1 for queueSelect, 2 for outputFileName
-	confirmationMessage string           // Holds the confirmation message
-	errorMessage        string           // Holds the error message (if URL is empty)
-	confirmationTime    time.Time        // Time when confirmation message was set
-	errorTime           time.Time        // Time when error message was set
-	downloadsTable      table.Model
-	selectedRow         int
-	queuesTable         table.Model // Add the queuesTable field
+	currentTab            int
+	inputURL              textinput.Model
+	queueSelect           list.Model
+	outputFileName        textinput.Model
+	selectedQueueRowIndex int       // Tracks selected pages
+	focusedField          int       // 0 for inputURL, 1 for queueSelect, 2 for outputFileName
+	confirmationMessage   string    // Holds the confirmation message
+	errorMessage          string    // Holds the error message (if URL is empty)
+	confirmationTime      time.Time // Time when confirmation message was set
+	errorTime             time.Time // Time when error message was set
+	downloadsTable        table.Model
+	selectedRow           int
+	queuesTable           table.Model // Add the queuesTable field
 	// editingQueue          *manager.Queue // Holds the queue currently being edited (nil if no queue is being edited)
 	newQueueForm  bool // Flag to indicate if the form for adding a new queue is open
 	editQueueForm bool // Flag to indicate if the form for adding a new queue is open
@@ -322,34 +321,47 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 }
 
 func (m *Model) renderAddDownloadTab(tabsRow string) string {
+	var urlCursor string
+	if m.focusedField == 0 {
+		urlCursor = cursorStyle.Render("> ")
+	} else {
+		urlCursor = cursorStyle.Render("  ")
+	}
 	content := fmt.Sprintf(
 		"%s\n\n%s\n%s\n%s\n\n",
 		tabsRow,
 		greenTitleStyle.Render("File Address:"),
-		cursorStyle.Render("> ")+m.inputURL.View(),
+		urlCursor+m.inputURL.View(),
 		greenTitleStyle.Render("Queue Selection:"),
 	)
 
-	for i, item := range m.queueSelect.Items() {
+	for i, item := range m.queuesTable.Rows() {
 		cursor := " "
 		checkbox := "[ ]"
 
-		if m.selectedPage == i {
-			cursor = ">"
-		}
-		if _, selected := m.selectedFiles[i]; selected {
+		if m.selectedQueueRowIndex == i {
+			if m.focusedField == 1 {
+				cursor = ">"
+			}
 			checkbox = "[" + checkmark + "]"
 		}
-		if queueItem, ok := item.(manager.Queue); ok {
-			content += fmt.Sprintf("%s %s %s\n", cursor, checkbox, strconv.Itoa(queueItem.ID))
-		}
+
+		content += fmt.Sprintf("%s %s Queue %s\n", cursor, checkbox, item[0])
+
+	}
+
+	var outnameCursor string
+	if m.focusedField == 2 {
+		outnameCursor = cursorStyle.Render("> ")
+	} else {
+		outnameCursor = cursorStyle.Render("  ")
 	}
 
 	content += fmt.Sprintf(
 		"\n%s\n%s\n\n%s\n\n",
 		greenTitleStyle.Render("Output File Name (optional):"),
-		cursorStyle.Render("> ")+m.outputFileName.View(),
-		yellowTitleStyle.Render("Press Enter to confirm, Space to select pages, ESC to \n"+
+		outnameCursor+m.outputFileName.View(),
+		yellowTitleStyle.Render("Press Enter to confirm, up/down to select Queue, ESC to \n"+
 			"cancel/reset, or * to quit the download manager."),
 	)
 
@@ -541,8 +553,7 @@ func NewModel() *Model {
 		inputURL:              ti,
 		queueSelect:           queueSelect,
 		outputFileName:        outputFileName,
-		selectedPage:          0,
-		selectedFiles:         make(map[int]struct{}),
+		selectedQueueRowIndex: 0,
 		focusedField:          0,
 		confirmationMessage:   "",
 		errorMessage:          "",

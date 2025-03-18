@@ -37,10 +37,12 @@ func (m *Model) handleNewDownloadSubmit() {
 		// queue := m.queueSelect.SelectedItem().FilterValue()
 		outputFile := m.outputFileName.Value()
 
+		queue := m.queues[m.queuesTable.Rows()[m.selectedQueueRowIndex][0]]
+
 		newDwnload := manager.Download{
 			URL:        downloadURL,
-			QueueID:    1,
-			Queue:      m.queues["1"],
+			QueueID:    queue.ID,
+			Queue:      queue,
 			OutputFile: outputFile,
 			Status:     "pending",
 		}
@@ -103,7 +105,7 @@ func (m *Model) resetFieldsForTab1() {
 	m.inputURL.SetValue("")
 	m.queueSelect.ResetSelected()
 	m.outputFileName.SetValue("")
-	m.selectedFiles = make(map[int]struct{})
+	m.selectedQueueRowIndex = 0
 }
 
 // unused
@@ -114,14 +116,14 @@ func (m *Model) resetFieldsForTab1() {
 // }
 
 func (m *Model) handleUpArrowForTab1() {
-	if m.focusedField == 1 && m.selectedPage > 0 {
-		m.selectedPage--
+	if m.focusedField == 1 {
+		m.selectedQueueRowIndex = (m.selectedQueueRowIndex - 1) % len(m.queuesTable.Rows())
 	}
 }
 
 func (m *Model) handleDownArrowForTab1() {
-	if m.focusedField == 1 && m.selectedPage < len(m.queueSelect.Items())-1 {
-		m.selectedPage++
+	if m.focusedField == 1 {
+		m.selectedQueueRowIndex = (m.selectedQueueRowIndex + 1) % len(m.queuesTable.Rows())
 	}
 }
 
@@ -146,11 +148,7 @@ func (m *Model) updateFocusedFieldForTab1() {
 
 func (m *Model) handleSpaceKey() {
 	if m.currentTab == tabAddDownload && m.focusedField == 1 {
-		if _, exists := m.selectedFiles[m.selectedPage]; exists {
-			delete(m.selectedFiles, m.selectedPage)
-		} else {
-			m.selectedFiles[m.selectedPage] = struct{}{}
-		}
+		m.selectedQueueRowIndex++
 	}
 }
 
@@ -261,6 +259,7 @@ func (m *Model) deleteQueue() {
 		if m.selectedRow >= len(newRows) {
 			m.selectedRow = len(newRows) - 1
 		}
+		m.selectedQueueRowIndex = 0
 	}
 }
 
