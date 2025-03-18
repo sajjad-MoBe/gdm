@@ -37,12 +37,12 @@ type Download struct {
 	IsPartial       bool              `gorm:"default:false" json:"is_partial"`
 	OutputFile      string            `json:"output_file"`
 	URL             string            `json:"url"`
-	Retries         int               `gorm:"default:0" json:"retries"`
 	Queue           *Queue            `gorm:"foreignKey:QueueID"`
 }
 
 type DownloadTemps struct {
 	TotalDownloaded int64
+	Retries         int
 	StartTime       time.Time
 	Mutex           *sync.Mutex
 }

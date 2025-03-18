@@ -201,12 +201,16 @@ func (m *Model) togglePauseDownload() {
 		// Check current state of the download
 		state := m.downloadsTable.Rows()[m.selectedRow][2]
 
-		if state == "Downloading" {
+		if state == "downloading" {
 			// Pause the download
-			m.downloadsTable.Rows()[m.selectedRow][2] = "Paused" // Update the state to "Paused"
-		} else if state == "Paused" {
+			m.downloadsTable.Rows()[m.selectedRow][2] = "paused" // Update the state to "Paused"
+			download := m.downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
+			m.downloadmanager.PauseDownload(download)
+		} else if state == "paused" {
 			// Resume the download
-			m.downloadsTable.Rows()[m.selectedRow][2] = "Downloading" // Update the state to "Downloading"
+			m.downloadsTable.Rows()[m.selectedRow][2] = "pending" // Update the state to "pending"
+			download := m.downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
+			m.downloadmanager.ResumeDownload(download)
 		}
 	}
 }
@@ -236,10 +240,11 @@ func (m *Model) retryDownload() {
 		// Check the state of the selected row
 		state := m.downloadsTable.Rows()[m.selectedRow][2]
 
-		if state == "Failed" {
+		if state == "failed" {
 			// Retry the download
-			m.downloadsTable.Rows()[m.selectedRow][2] = "Retrying" // Update status to "Retrying"
-			// Optionally, trigger actual retry logic here (e.g., retry network request)
+			m.downloadsTable.Rows()[m.selectedRow][2] = "retrying" // Update status to "Retrying"
+			download := m.downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
+			m.downloadmanager.RetryDownload(download)
 		}
 	}
 }

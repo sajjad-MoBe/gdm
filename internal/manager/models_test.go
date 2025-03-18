@@ -69,7 +69,6 @@ func TestCreateAndGetObject(t *testing.T) {
 		OutputFile: "10mb.zip",
 		Status:     "pending",
 		URL:        "https://example.com/download",
-		Retries:    0,
 	}
 	fmt.Printf("download: %+v\n", download.Queue)
 
@@ -98,12 +97,12 @@ func TestCreateAndGetObject(t *testing.T) {
 	if savedDownload.URL != download.URL {
 		t.Errorf("Expected URL %s, got %s", download.URL, savedDownload.URL)
 	}
-	if savedDownload.Retries != download.Retries {
-		t.Errorf("Expected Retries %d, got %d", download.Retries, savedDownload.Retries)
+	if savedDownload.Temps.Retries != download.Temps.Retries {
+		t.Errorf("Expected Retries %d, got %d", download.Temps.Retries, savedDownload.Temps.Retries)
 	}
 
 	// test for save object
-	savedDownload.Retries = 1
+	savedDownload.Temps.Retries = 1
 	if err := Save(&savedDownload); err != nil {
 		log.Fatalf("Failed to save updated download: %v", err)
 	}
@@ -112,8 +111,8 @@ func TestCreateAndGetObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to retrieve download: %v", err)
 	}
-	if downloads[0].Retries != savedDownload.Retries {
-		t.Errorf("Expected Retries %d, got %d", downloads[0].Retries, savedDownload.Retries)
+	if downloads[0].Temps.Retries != savedDownload.Temps.Retries {
+		t.Errorf("Expected Retries %d, got %d", downloads[0].Temps.Retries, savedDownload.Temps.Retries)
 	}
 
 }

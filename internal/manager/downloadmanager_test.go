@@ -38,7 +38,6 @@ func TestDownloadManager(t *testing.T) {
 		Status:     "pending",
 		OutputFile: "example.html",
 		URL:        "https://example.com",
-		Retries:    0,
 	}
 	download2 := Download{
 		QueueID:    queue2.ID,
@@ -46,7 +45,6 @@ func TestDownloadManager(t *testing.T) {
 		Status:     "pending",
 		OutputFile: "google.html",
 		URL:        "https://google.com",
-		Retries:    0,
 	}
 	download3 := Download{
 		QueueID:    queue1.ID,
@@ -54,7 +52,6 @@ func TestDownloadManager(t *testing.T) {
 		Status:     "pending",
 		OutputFile: "10mb.zip",
 		URL:        "http://212.183.159.230/10MB.zip",
-		Retries:    0,
 	}
 
 	MaxParts := 10 // Maximum number of parts for one download

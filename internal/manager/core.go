@@ -79,7 +79,7 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 	if download.Status == "finished" {
 		return
 	}
-	download.Temps = &DownloadTemps{0, time.Now(), &sync.Mutex{}}
+	download.Temps = &DownloadTemps{0, 0, time.Now(), &sync.Mutex{}}
 	download.IsActive = false
 
 	if download.Status != "failed" && download.Status != "paused" {
@@ -166,6 +166,15 @@ func (dm *DownloadManager) PauseDownload(download *Download) {
 
 func (dm *DownloadManager) ResumeDownload(download *Download) {
 	download.Status = "initializing"
+}
+
+func (dm *DownloadManager) RetryDownload(download *Download) {
+	download.Status = "initializing"
+	download.Temps.Retries = 0
+	for _, p := range download.PartDownloaders {
+		p.IsFailed = false
+		p.IsPaused = false
+	}
 }
 
 func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitGroup) {
@@ -305,15 +314,17 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 			break
 		}
 		if err != nil {
-			download.Retries++
+			download.Temps.Mutex.Lock()
+			download.Temps.Retries++
+			download.Temps.Mutex.Unlock()
 
-			if download.Retries > download.Queue.MaxRetries {
+			if download.Temps.Retries > download.Queue.MaxRetries {
 				partDownloader.IsFailed = true
 				return err
 			}
 			time.Sleep(2 * time.Second)
 		}
-		if download.Retries > download.Queue.MaxRetries {
+		if download.Temps.Retries > download.Queue.MaxRetries {
 			return nil
 		}
 	}
