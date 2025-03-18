@@ -90,6 +90,7 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 
 }
 func (dm *DownloadManager) initializeDownload(download *Download) {
+	download.Temps.TotalDownloaded = 0
 	if download.TotalSize < 1 {
 		resp, err := http.Head(download.URL)
 		if err != nil {
@@ -137,6 +138,7 @@ func (dm *DownloadManager) initializeDownload(download *Download) {
 			tempFile := fmt.Sprintf(download.OutputFile+"-d%d-part-%d.tmp", download.ID, i)
 			tempFile = filepath.Join(dm.TempFolder, tempFile)
 			downloaded := getFileSize(tempFile)
+			download.Temps.TotalDownloaded += downloaded
 			// fmt.Println(downloaded)
 			// os.Exit(0)
 			download.PartDownloaders = append(
@@ -177,6 +179,24 @@ func (dm *DownloadManager) RetryDownload(download *Download) {
 	download.Status = "initializing"
 	download.Temps.Retries = 0
 	go dm.initializeDownload(download)
+}
+
+func (dm *DownloadManager) DeleteDownload(download *Download) {
+	download.Status = "paused"
+	var updatedDownloads []*Download
+	for _, d := range download.Queue.Downloads {
+		if d.ID != download.ID {
+			updatedDownloads = append(updatedDownloads, d)
+		}
+	}
+	download.Queue.Downloads = updatedDownloads
+	go func() {
+		time.Sleep(time.Second) // ensure download is paused
+		for _, pd := range download.PartDownloaders {
+			os.Remove(pd.TempFile)
+		}
+	}()
+
 }
 
 func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitGroup) {
@@ -249,9 +269,7 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 	// fmt.Println(partDownloader.TempFile, partDownloader.Start)
 	// fmt.Println(partDownloader.Downloaded)
 	// os.Exit(0)
-	download.Temps.Mutex.Lock()
-	download.Temps.TotalDownloaded += partDownloader.Downloaded
-	download.Temps.Mutex.Unlock()
+
 	if partDownloader.Start < partDownloader.End {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", partDownloader.Start, partDownloader.End))
 	} else if download.IsPartial {

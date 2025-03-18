@@ -221,6 +221,11 @@ func (m *Model) deleteDownload() {
 		// Remove the row from the table by slicing the rows
 		newRows := append(m.downloadsTable.Rows()[:m.selectedRow], m.downloadsTable.Rows()[m.selectedRow+1:]...)
 
+		download := m.downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
+		m.downloadmanager.DeleteDownload(download)
+
+		delete(m.downloads, strconv.Itoa(m.selectedRow))
+
 		// Update the downloadsTable with the new rows
 		m.downloadsTable = table.New(
 			table.WithColumns(downloadColumns), // Keep the existing columns

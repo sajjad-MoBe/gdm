@@ -578,7 +578,7 @@ func (m *Model) updateDownloadTable() {
 			downloadRows[index][3] = "?"
 		}
 
-		if download.GetStatus() == "finished" {
+		if download.GetStatus() != "downloading" {
 			downloadRows[index][4] = "-"
 		} else {
 			speed := download.GetSpeed()
