@@ -253,8 +253,8 @@ func (m *Model) deleteQueue() {
 
 		// Update the queuesTable with the new rows
 		m.queuesTable = table.New(
-			table.WithColumns(downloadColumns), // Keep the existing columns
-			table.WithRows(newRows),            // Set the new rows
+			table.WithColumns(queueColumns), // Keep the existing columns
+			table.WithRows(newRows),         // Set the new rows
 		)
 
 		// Adjust the selected row to prevent out of bounds error if the last row is deleted
