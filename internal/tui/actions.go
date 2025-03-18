@@ -143,9 +143,11 @@ func (m *Model) updateFocusedFieldForTab1() {
 	if m.currentTab == tabAddDownload {
 		url := m.inputURL.Value()
 		if m.focusedField == 0 && len(m.outputFileName.Value()) == 0 {
-			m.outputFileName.SetValue(manager.GetFileNameFromURL(url))
-
+			if outputFileName, err := manager.GetFileNameFromURL(url); err == nil {
+				m.outputFileName.SetValue(outputFileName)
+			}
 		}
+		m.focusedField = (m.focusedField + 1) % 3
 		m.updateFieldFocus()
 	}
 }

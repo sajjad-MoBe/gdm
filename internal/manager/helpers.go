@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -75,24 +76,22 @@ func mergeParts(download *Download) error {
 	return nil
 }
 
-func GetFileNameFromURL(URL string) string {
-
+func GetFileNameFromURL(URL string) (string, error) {
+	if len(URL) < 2 {
+		return "", errors.New("not enough lenght for URL")
+	}
 	parsedURL, err := url.Parse(URL)
 	if err != nil {
-		return ""
+		return "", err
 	}
 
-	return path.Base(parsedURL.Path)
+	return path.Base(parsedURL.Path), nil
 
 }
 
 func IsValidURL(URL string) bool {
 
 	_, err := url.Parse(URL)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 
 }
