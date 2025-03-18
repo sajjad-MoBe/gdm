@@ -26,18 +26,58 @@ func (m *Model) handleTabRight() {
 	}
 }
 
-func (m *Model) handleEnterPress() {
-	if m.currentTab == tabAddDownload {
-		m.processURLInput()
-	}
-}
-
-func (m *Model) processURLInput() {
+// Handle the submission of a new download form
+func (m *Model) handleNewDownloadSubmit() {
 	if m.inputURL.Value() == "" {
 		m.showURLValidationError()
 	} else {
+		// Create a new download with the data entered in the fields
+		downloadURL := m.inputURL.Value()
+		// validate download url
+		// queue := m.queueSelect.SelectedItem().FilterValue()
+		outputFile := m.outputFileName.Value()
+
+		newDwnload := manager.Download{
+			URL:        downloadURL,
+			QueueID:    1,
+			Queue:      m.queues["1"],
+			OutputFile: outputFile,
+			Status:     "pending",
+		}
+
+		m.addNewDownload(&newDwnload)
+
+		// Reset the form after submission
+		m.inputURL.Reset()
+		m.outputFileName.Reset()
+
 		m.showDownloadConfirmation()
 	}
+}
+
+// Add a new download
+func (m *Model) addNewDownload(download *manager.Download) {
+	if err := manager.Create(&download); err != nil {
+		//	show error
+		fmt.Printf("failed to create download: %v", err)
+		return
+	}
+	m.downloadmanager.AddDownload(download)
+	m.downloads[strconv.Itoa(download.ID)] = download
+
+	newRow := table.Row{
+		strconv.Itoa(download.ID),
+		download.URL,
+		download.Status,
+		"N/A",
+		"N/A",
+	}
+
+	// Add the row to the downloadsTable
+	m.downloadsTable = table.New(
+		table.WithColumns(downloadColumns),                      // Keep the existing columns
+		table.WithRows(append(m.downloadsTable.Rows(), newRow)), // Add the new row
+	)
 }
 
 func (m *Model) showURLValidationError() {
@@ -51,7 +91,7 @@ func (m *Model) showURLValidationError() {
 }
 
 func (m *Model) showDownloadConfirmation() {
-	m.confirmationMessage = "Download has been added!"
+	m.confirmationMessage = "Download has been added, press right button to show Downloads!"
 	m.confirmationTime = time.Now()
 
 	m.resetFieldsForTab1()
@@ -241,16 +281,28 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 			fmt.Println("Error:", err)
 			return
 		}
-		newQueue := manager.Queue{
-			SaveDir:                m.saveDirInput.Value(),
-			MaxConcurrentDownloads: MaxConcurrentDownloads,
-			MaxBandwidth:           MaxBandwidth,
-		}
 
 		if m.editQueueForm {
-			// Editing an existing queue
-			m.editQueue(m.selectedRow, &newQueue)
+			if m.selectedRow >= 0 && m.selectedRow < len(m.queuesTable.Rows()) {
+				oldQueue := m.queuesTable.Rows()[m.selectedRow]
+
+				thisQueue := m.queues[oldQueue[0]]
+				thisQueue.SaveDir = m.saveDirInput.Value()
+				thisQueue.MaxConcurrentDownloads = MaxConcurrentDownloads
+				if thisQueue.MaxBandwidth != MaxBandwidth {
+					thisQueue.SetBandwith(MaxBandwidth)
+				}
+				// Editing this existing queue
+
+				m.editQueue(oldQueue, thisQueue)
+
+			}
 		} else {
+			newQueue := manager.Queue{
+				SaveDir:                m.saveDirInput.Value(),
+				MaxConcurrentDownloads: MaxConcurrentDownloads,
+				MaxBandwidth:           MaxBandwidth,
+			}
 			// Adding a new queue
 			m.addNewQueue(&newQueue)
 		}
@@ -275,7 +327,11 @@ func (m *Model) addNewQueue(queue *manager.Queue) {
 	if err := manager.Create(&queue); err != nil {
 		//	show error
 		fmt.Printf("failed to create queue: %v", err)
+		return
 	}
+	m.downloadmanager.AddQueue(queue)
+	m.queues[strconv.Itoa(queue.ID)] = queue
+
 	newRow := table.Row{
 		strconv.Itoa(queue.ID),
 		strconv.Itoa(queue.MaxConcurrentDownloads),
@@ -293,25 +349,24 @@ func (m *Model) addNewQueue(queue *manager.Queue) {
 }
 
 // Edit an existing queue
-func (m *Model) editQueue(index int, queue *manager.Queue) {
-	if index >= 0 && index < len(m.queuesTable.Rows()) {
-		oldQueue := m.queuesTable.Rows()[index]
-		// Update the selected queue with new values
-		m.queuesTable.Rows()[index] = table.Row{
-			oldQueue[0],
-			queue.SaveDir,
-			strconv.Itoa(queue.MaxConcurrentDownloads),
-			strconv.Itoa(queue.MaxBandwidth),
-			oldQueue[4],
-			oldQueue[5],
-		}
-
-		// Update the table
-		m.queuesTable = table.New(
-			table.WithColumns(queueColumns),
-			table.WithRows(m.queuesTable.Rows()),
-		)
+func (m *Model) editQueue(oldQueue table.Row, queue *manager.Queue) {
+	manager.Save(queue)
+	// Update the selected queue with new values
+	m.queuesTable.Rows()[m.selectedRow] = table.Row{
+		oldQueue[0],
+		queue.SaveDir,
+		strconv.Itoa(queue.MaxConcurrentDownloads),
+		strconv.Itoa(queue.MaxBandwidth),
+		oldQueue[4],
+		oldQueue[5],
 	}
+
+	// Update the table
+	m.queuesTable = table.New(
+		table.WithColumns(queueColumns),
+		table.WithRows(m.queuesTable.Rows()),
+	)
+
 }
 
 func (m *Model) handleCancel() {
@@ -354,7 +409,6 @@ func (m *Model) handleSwitchToAddQueueForm() {
 		if !m.newQueueForm && !m.editQueueForm {
 			counterForForms = counterForForms + 1
 			m.newQueueForm = true
-			m.newQueueData = &manager.Queue{}
 			m.editQueueForm = false
 			m.updateFocusedFieldForTab3()
 		}
@@ -369,7 +423,11 @@ func (m *Model) handleSwitchToEditQueueForm() {
 			m.editQueueForm = true
 			m.newQueueForm = false
 			queueID := m.queuesTable.Rows()[m.selectedRow][0]
-			m.newQueueData = m.queues[queueID]
+			thisQueue := m.queues[queueID]
+			m.saveDirInput.SetValue(thisQueue.SaveDir)
+			m.maxConcurrentInput.SetValue(strconv.Itoa(thisQueue.MaxConcurrentDownloads))
+			m.maxBandwidthInput.SetValue(strconv.Itoa(thisQueue.MaxBandwidth))
+
 			// queue[0]
 			m.updateFocusedFieldForTab3()
 		}

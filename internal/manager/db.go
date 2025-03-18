@@ -77,6 +77,9 @@ func Create(model interface{}) error {
 func GetAll(model interface{}) error {
 	return GetDB().Find(model).Error
 }
+func GetAllQueues(queues *[]*Queue) error {
+	return GetDB().Find(&queues).Error
+}
 func GetQueueBy(field string, value interface{}) ([]Queue, error) {
 	var queues []Queue
 	if err := GetDB().Where(field+"= ?", value).Find(&queues).Error; err != nil {
@@ -91,6 +94,9 @@ func GetDownloadBy(field string, value interface{}) ([]Download, error) {
 		return nil, err
 	}
 	return downloads, nil
+}
+func GetAllDownloads(downloads *[]*Download) error {
+	return GetDB().Preload("Queue").Find(&downloads).Error
 }
 
 func Save(model interface{}) error {

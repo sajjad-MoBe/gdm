@@ -19,8 +19,8 @@ var counterForForms = 0
 
 // Define your table columns for the Downloads tab
 var downloadColumns = []table.Column{
-	{Title: "Queue ID", Width: 10},
-	{Title: "URL", Width: 30},
+	{Title: "Download ID", Width: 15},
+	{Title: "URL", Width: 60},
 	{Title: "Status", Width: 15},
 	{Title: "Progress", Width: 10},
 	{Title: "Speed", Width: 15},
@@ -36,8 +36,8 @@ var downloadColumns = []table.Column{
 
 // Define your table columns for the Queues tab
 var queueColumns = []table.Column{
-	{Title: "Queue ID", Width: 10},
-	{Title: "SaveDir", Width: 20},
+	{Title: "Queue ID", Width: 15},
+	{Title: "SaveDir", Width: 60},
 	{Title: "Max Concurrent", Width: 15},
 	{Title: "Max Bandwidth", Width: 15},
 	{Title: "Active Start Time", Width: 20},
@@ -76,9 +76,9 @@ type Model struct {
 	selectedRow         int
 	queuesTable         table.Model // Add the queuesTable field
 	// editingQueue          *manager.Queue // Holds the queue currently being edited (nil if no queue is being edited)
-	newQueueForm          bool           // Flag to indicate if the form for adding a new queue is open
-	editQueueForm         bool           // Flag to indicate if the form for adding a new queue is open
-	newQueueData          *manager.Queue // Temporarily holds new queue data while filling out the form
+	newQueueForm  bool // Flag to indicate if the form for adding a new queue is open
+	editQueueForm bool // Flag to indicate if the form for adding a new queue is open
+	// newQueueData          *manager.Queue // Temporarily holds new queue data while filling out the form
 	saveDirInput          textinput.Model
 	maxConcurrentInput    textinput.Model
 	maxBandwidthInput     textinput.Model
@@ -129,13 +129,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case updateDownloadMsg:
-		if m.currentTab == 1 {
+		if m.currentTab == tabDownloads {
 			m.updateDownloadTable()
 		}
 		return m, tickToUpdateDownloadTable()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "*":
+			for _, row := range m.downloads {
+				manager.Save(row)
+			}
+
 			return m, tea.Quit
 		case "left":
 			m.handleTabLeft()
@@ -143,7 +147,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.handleTabRight()
 		case "enter":
 			if m.currentTab == tabAddDownload {
-				m.handleEnterPress()
+				m.handleNewDownloadSubmit()
 			}
 			if m.currentTab == tabQueues {
 				m.handleNewOrEditQueueFormSubmit()
@@ -453,8 +457,8 @@ func (m *Model) renderQueueFormForEdit() string {
 
 func NewModel() *Model {
 	manager.InitializeDB()
-	MaxParts := 10  // Maximum number of parts for one download
-	PartSize := 100 // create new part downloader per each PartSize mb
+	MaxParts := 10 // Maximum number of parts for one download
+	PartSize := 10 // create new part downloader per each PartSize mb
 	downloadmanager := manager.NewManager(MaxParts, PartSize)
 
 	ti := textinput.New()
@@ -465,22 +469,25 @@ func NewModel() *Model {
 	outputFileName.Placeholder = "Optional output file name"
 	outputFileName.Blur()
 
-	var queues []manager.Queue
-	if err := manager.GetAll(&queues); err != nil {
+	var queues []*manager.Queue
+	if err := manager.GetAllQueues(&queues); err != nil {
 		fmt.Printf("failed to get queues: %v", err)
 	}
+
 	var queuesList []list.Item
 	queueRows := []table.Row{}
 	queuesMap := make(map[string]*manager.Queue)
 	for _, row := range queues {
+		maxBandwidth := row.MaxBandwidth
 		queuesList = append(queuesList, row)
-		downloadmanager.AddQueue(&row)
-		queuesMap[strconv.Itoa(row.ID)] = &row
+		downloadmanager.AddQueue(row)
+		queuesMap[strconv.Itoa(row.ID)] = row
+
 		queueRows = append(queueRows, table.Row{
 			strconv.Itoa(row.ID),
 			row.SaveDir,
 			strconv.Itoa(row.MaxConcurrentDownloads),
-			strconv.Itoa(row.MaxBandwidth),
+			strconv.Itoa(maxBandwidth),
 			row.ActiveStartTime,
 			row.ActiveEndTime,
 		})
@@ -491,15 +498,19 @@ func NewModel() *Model {
 	)
 	queueSelect := list.New(queuesList, list.NewDefaultDelegate(), 0, 0)
 
-	var downloads []manager.Download
-	if err := manager.GetAll(&downloads); err != nil {
+	var downloads []*manager.Download
+	if err := manager.GetAllDownloads(&downloads); err != nil {
 		fmt.Printf("failed to get downloads: %v", err)
 	}
 	downloadRows := []table.Row{}
 	downloadsMap := make(map[string]*manager.Download)
 	for _, row := range downloads {
-		downloadmanager.AddDownload(&row)
-		downloadsMap[strconv.Itoa(row.ID)] = &row
+		// row.QueueID = queuesMap[strconv.Itoa(row.QueueID)].ID
+		row.Queue = queuesMap[strconv.Itoa(row.QueueID)]
+		// manager.Save(row)
+
+		downloadmanager.AddDownload(row)
+		downloadsMap[strconv.Itoa(row.ID)] = row
 		downloadRows = append(downloadRows, table.Row{
 			strconv.Itoa(row.ID),
 			row.URL,
@@ -551,12 +562,33 @@ func (m *Model) updateDownloadTable() {
 	downloadRows := m.downloadsTable.Rows()
 	for index, row := range downloadRows {
 		download := m.downloads[row[0]]
-		downloadRows[index][3] = download.Status
+		downloadRows[index][2] = download.GetStatus()
 
-		downloadRows[index][4] = strconv.Itoa(download.GetSpeed())
+		if download.IsPartial {
+			switch download.Status {
+			case "finished":
+				downloadRows[index][3] = "100%"
+			case "initializing":
+				downloadRows[index][3] = "N/A"
+			default:
+				downloadRows[index][3] = strconv.Itoa(download.GetProgress()) + "%"
 
-		downloadRows[index][3] = strconv.Itoa(download.GetProgress())
+			}
+		} else {
+			downloadRows[index][3] = "?"
+		}
 
+		if download.GetStatus() == "finished" {
+			downloadRows[index][4] = "-"
+		} else {
+			speed := download.GetSpeed()
+			if speed > 1024 {
+				downloadRows[index][4] = fmt.Sprintf("%.1f", float32(speed)/1024) + "Mb/s"
+			} else {
+				downloadRows[index][4] = strconv.Itoa(download.GetSpeed()) + "Kb/s"
+			}
+			downloadRows[index][4] = strconv.Itoa(download.GetSpeed())
+		}
 	}
 	m.downloadsTable.SetRows(downloadRows)
 }

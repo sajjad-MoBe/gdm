@@ -66,7 +66,7 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 
 				}
 			} else {
-				// fmt.Println("quqeue", queue.ID, "not working")
+				fmt.Println("quqeue", queue.ID, "not working")
 				queue.IsActive = false
 			}
 			// fmt.Printf("\n%s", progress)
@@ -76,9 +76,13 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 }
 
 func (dm *DownloadManager) AddDownload(download *Download) {
+	if download.Status == "finished" {
+		return
+	}
 	download.Temps = &DownloadTemps{0, time.Now(), &sync.Mutex{}}
 	download.IsActive = false
-	if download.Status != "finished" && download.Status != "failed" && download.Status != "paused" {
+
+	if download.Status != "failed" && download.Status != "paused" {
 		download.Status = "initializing"
 	}
 	download.Queue.Downloads = append(download.Queue.Downloads, download)
@@ -108,9 +112,9 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 				return
 			}
 			defer resp.Body.Close()
-
 			if resp.StatusCode != http.StatusPartialContent {
 				download.IsPartial = false
+				download.TotalSize = 0
 			} else {
 				download.IsPartial = true
 				// fmt.Println(download.Temps.TotalSize)
@@ -125,22 +129,34 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 				if i == numParts-1 {
 					end = download.TotalSize - 1
 				}
-				tempFile := fmt.Sprintf(download.OutputFile+"-part-%d.tmp", i)
+				tempFile := fmt.Sprintf(download.OutputFile+"-d%d-part-%d.tmp", download.ID, i)
 				tempFile = filepath.Join(dm.TempFolder, tempFile)
+				downloaded := getFileSize(tempFile)
+				// fmt.Println(downloaded)
+				// os.Exit(0)
 				download.PartDownloaders = append(
 					download.PartDownloaders,
-					&PartDownloader{Index: i, Start: start + getFileSize(tempFile), End: end, TempFile: tempFile},
+					&PartDownloader{Index: i, Start: start + downloaded, Downloaded: downloaded, End: end, TempFile: tempFile},
 				)
+
 			}
 		} else {
 			download.PartDownloaders = append(download.PartDownloaders, &PartDownloader{
-				Index:    0,
-				Start:    0,
-				End:      0,
-				TempFile: filepath.Join(dm.TempFolder, download.OutputFile+"-part-0.tmp"),
+				Index: 0,
+				Start: 0,
+				End:   0,
+				TempFile: filepath.Join(dm.TempFolder,
+					fmt.Sprintf(
+						download.OutputFile+"-d%d-part-%d.tmp",
+						download.ID,
+						0,
+					),
+				),
 			})
 		}
-		download.Status = "pending"
+		if download.Status == "initializing" {
+			download.Status = "pending"
+		}
 	}()
 }
 
@@ -156,11 +172,16 @@ func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitG
 
 	var wg sync.WaitGroup
 	// fmt.Println("downloading " + download.URL)
-	for _, part := range download.PartDownloaders {
+	for id, part := range download.PartDownloaders {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			download.Queue.PartDownloaders <- part
+			if id == 0 {
+				download.Temps.StartTime = time.Now()
+				download.Status = "downloading"
+
+			}
 			StartWG.Done()
 			// fmt.Println("part", part.Index, "started")
 			err := dm.partDownload(download, part)
@@ -177,10 +198,8 @@ func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitG
 
 		}()
 	}
-	time.Sleep(time.Second * 10)
+	// time.Sleep(time.Second * 10)
 	// close(download.IsCompletlyStarted)
-	download.Temps.StartTime = time.Now()
-	download.Status = "downloading"
 
 	go func() {
 		wg.Wait()
@@ -216,6 +235,11 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 		return err
 	}
 	// fmt.Println(partDownloader.TempFile, partDownloader.Start)
+	// fmt.Println(partDownloader.Downloaded)
+	// os.Exit(0)
+	download.Temps.Mutex.Lock()
+	download.Temps.TotalDownloaded += partDownloader.Downloaded
+	download.Temps.Mutex.Unlock()
 	if partDownloader.Start < partDownloader.End {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", partDownloader.Start, partDownloader.End))
 	} else if download.IsPartial {
@@ -257,7 +281,8 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 				buf = make([]byte, 1024*1024) // 2^20 or 1 Mb
 			}
 		}
-		if download.Queue.MaxBandwidth > 0 {
+		if bandwidth > 0 {
+			// fmt.Println(download.Queue.MaxBandwidth)
 			<-download.Queue.tokenBucket
 		}
 		n, err := resp.Body.Read(buf)
@@ -297,13 +322,18 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 }
 
 func (queue *Queue) SetBandwith(bandwith int) {
-	queue.MaxBandwidth = -1
+	queue.MaxBandwidth = 0
 	if queue.ticker != nil {
 		queue.ticker.Stop()
 	}
 	queue.tokenBucket = make(chan struct{}, bandwith)
 	go func() {
-		tokenInterval := max(1, 1000_000/bandwith)
+		var tokenInterval int
+		if bandwith == 0 {
+			tokenInterval = 1000_000
+		} else {
+			tokenInterval = max(1, 1000_000/bandwith)
+		}
 		queue.ticker = time.NewTicker(time.Duration(tokenInterval) * time.Microsecond)
 		queue.MaxBandwidth = bandwith
 

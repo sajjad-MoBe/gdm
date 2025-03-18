@@ -16,7 +16,7 @@ type Queue struct {
 	SaveDir                   string               `json:"save_dir"`
 	MaxConcurrentDownloads    int                  `gorm:"default:5" json:"max_concurrent_downloads"`
 	StartAtOneWorkerAvailable bool                 `gorm:"default:false" json:"start_at_one_worker_available"`
-	MaxBandwidth              int                  `gorm:"default:-1" json:"max_bandwidth"`
+	MaxBandwidth              int                  `gorm:"default:0" json:"max_bandwidth"`
 	ActiveStartTime           string               `gorm:"default:'00:00'" json:"active_start_time"`
 	ActiveEndTime             string               `gorm:"default:'23:59'" json:"active_end_time"`
 	MaxRetries                int                  `gorm:"default:3" json:"max_retries"`
@@ -65,6 +65,9 @@ type DownloadManager struct {
 	TempFolder string
 }
 
+func (d *Download) GetStatus() string {
+	return d.Status
+}
 func (d *Download) GetSpeed() int {
 	totalKB := 0
 	for _, p := range d.PartDownloaders {
@@ -73,5 +76,8 @@ func (d *Download) GetSpeed() int {
 	return totalKB
 }
 func (d *Download) GetProgress() int {
-	return int(d.Temps.TotalDownloaded / d.TotalSize)
+	if d.TotalSize == 0 {
+		return 0
+	}
+	return int(d.Temps.TotalDownloaded * 100 / d.TotalSize)
 }
