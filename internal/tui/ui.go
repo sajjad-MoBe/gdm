@@ -471,35 +471,6 @@ func (m *Model) renderQueueFormForEdit() string {
 
 func NewModel() *Model {
 	manager.InitializeDB()
-
-	manager.Create(&manager.Download{
-		QueueID: 10,
-		// Queue:      &queue2,
-		Status:     "pending",
-		OutputFile: "10mb.zip",
-		URL:        "http://212.183.159.230/10MB.zip",
-	})
-	manager.Create(&manager.Download{
-		QueueID: 10,
-		// Queue:      &queue2,
-		Status:     "pending",
-		OutputFile: "10mb.zip",
-		URL:        "http://212.183.159.230/10MB.zip",
-	})
-	manager.Create(&manager.Download{
-		QueueID: 11,
-		// Queue:      &queue2,
-		Status:     "pending",
-		OutputFile: "10mb.zip",
-		URL:        "https://150.uptv.ir/uptv/animation/1712405Garden_Party_2017_720p_UPTVz.co171240557.mkv",
-	})
-	manager.Create(&manager.Download{
-		QueueID: 11,
-		// Queue:      &queue2,
-		Status:     "pending",
-		OutputFile: "10mb.zip",
-		URL:        "https://150.uptv.ir/uptv/animation/1712405Garden_Party_2017_720p_UPTVz.co171240557.mkv",
-	})
 	MaxParts := 10 // Maximum number of parts for one download
 	PartSize := 10 // create new part downloader per each PartSize mb
 	downloadmanager := manager.NewManager(MaxParts, PartSize)
