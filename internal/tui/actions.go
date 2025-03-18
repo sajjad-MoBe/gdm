@@ -34,9 +34,9 @@ func (m *Model) handleNewDownloadSubmit() {
 		// Create a new download with the data entered in the fields
 		downloadURL := m.inputURL.Value()
 		// validate download url
-		// queue := m.queueSelect.SelectedItem().FilterValue()
-		outputFile := m.outputFileName.Value()
 
+		outputFile := m.outputFileName.Value()
+		// should be validated
 		queue := m.queues[m.queuesTable.Rows()[m.selectedQueueRowIndex][0]]
 
 		newDwnload := manager.Download{
@@ -141,7 +141,11 @@ func (m *Model) handleDownArrowForTab2() {
 
 func (m *Model) updateFocusedFieldForTab1() {
 	if m.currentTab == tabAddDownload {
-		m.focusedField = (m.focusedField + 1) % 3
+		url := m.inputURL.Value()
+		if m.focusedField == 0 && len(m.outputFileName.Value()) == 0 {
+			m.outputFileName.SetValue(manager.GetFileNameFromURL(url))
+
+		}
 		m.updateFieldFocus()
 	}
 }

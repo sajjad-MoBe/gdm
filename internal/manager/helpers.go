@@ -3,7 +3,9 @@ package manager
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 )
@@ -71,4 +73,26 @@ func mergeParts(download *Download) error {
 	}
 
 	return nil
+}
+
+func GetFileNameFromURL(URL string) string {
+
+	parsedURL, err := url.Parse(URL)
+	if err != nil {
+		return ""
+	}
+
+	return path.Base(parsedURL.Path)
+
+}
+
+func IsValidURL(URL string) bool {
+
+	_, err := url.Parse(URL)
+	if err != nil {
+		return false
+	}
+
+	return true
+
 }
