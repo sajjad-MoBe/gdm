@@ -86,78 +86,82 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 		download.Status = "initializing"
 	}
 	download.Queue.Downloads = append(download.Queue.Downloads, download)
-	go func() {
-		if download.TotalSize < 1 {
-			resp, err := http.Head(download.URL)
-			if err != nil {
-				// fmt.Println("Error:", err)
-				download.Status = "failed"
-				return
-			}
-			if resp.StatusCode != http.StatusOK {
-				download.Status = "failed"
-				// fmt.Println("Failed to fetch file details:", resp.Status)
-				return
-			}
-			download.TotalSize = resp.ContentLength
-			resp.Body.Close()
+	go dm.initializeDownload(download)
 
-			req, _ := http.NewRequest("GET", download.URL, nil)
-			client := &http.Client{}
-			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", 0, 1))
-			resp, err = client.Do(req)
-			if err != nil {
-				download.Status = "failed"
-				// fmt.Println("Error:", err)
-				return
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusPartialContent {
-				download.IsPartial = false
-				download.TotalSize = 0
-			} else {
-				download.IsPartial = true
-				// fmt.Println(download.Temps.TotalSize)
-			}
+}
+func (dm *DownloadManager) initializeDownload(download *Download) {
+	if download.TotalSize < 1 {
+		resp, err := http.Head(download.URL)
+		if err != nil {
+			// fmt.Println("Error:", err)
+			download.Status = "failed"
+			return
 		}
-		if download.IsPartial {
-			numParts := min(dm.MaxParts, max(1, int(download.TotalSize/(int64(dm.PartSize)*1024*1024)))) // each partSize mb add to new part
-			partSize := download.TotalSize / int64(numParts)
-			for i := 0; i < numParts; i++ {
-				start := partSize * int64(i)
-				end := start + partSize - 1
-				if i == numParts-1 {
-					end = download.TotalSize - 1
-				}
-				tempFile := fmt.Sprintf(download.OutputFile+"-d%d-part-%d.tmp", download.ID, i)
-				tempFile = filepath.Join(dm.TempFolder, tempFile)
-				downloaded := getFileSize(tempFile)
-				// fmt.Println(downloaded)
-				// os.Exit(0)
-				download.PartDownloaders = append(
-					download.PartDownloaders,
-					&PartDownloader{Index: i, Start: start + downloaded, Downloaded: downloaded, End: end, TempFile: tempFile},
-				)
+		if resp.StatusCode != http.StatusOK {
+			download.Status = "failed"
+			// fmt.Println("Failed to fetch file details:", resp.Status)
+			return
+		}
+		download.TotalSize = resp.ContentLength
+		resp.Body.Close()
 
-			}
+		req, _ := http.NewRequest("GET", download.URL, nil)
+		client := &http.Client{}
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", 0, 1))
+		resp, err = client.Do(req)
+		if err != nil {
+			download.Status = "failed"
+			// fmt.Println("Error:", err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusPartialContent {
+			download.IsPartial = false
+			download.TotalSize = 0
 		} else {
-			download.PartDownloaders = append(download.PartDownloaders, &PartDownloader{
-				Index: 0,
-				Start: 0,
-				End:   0,
-				TempFile: filepath.Join(dm.TempFolder,
-					fmt.Sprintf(
-						download.OutputFile+"-d%d-part-%d.tmp",
-						download.ID,
-						0,
-					),
+			download.IsPartial = true
+			// fmt.Println(download.Temps.TotalSize)
+		}
+	}
+	if download.IsPartial {
+		numParts := min(dm.MaxParts, max(1, int(download.TotalSize/(int64(dm.PartSize)*1024*1024)))) // each partSize mb add to new part
+		partSize := download.TotalSize / int64(numParts)
+		var PartDownloaders []*PartDownloader
+		download.PartDownloaders = PartDownloaders
+		for i := 0; i < numParts; i++ {
+			start := partSize * int64(i)
+			end := start + partSize - 1
+			if i == numParts-1 {
+				end = download.TotalSize - 1
+			}
+			tempFile := fmt.Sprintf(download.OutputFile+"-d%d-part-%d.tmp", download.ID, i)
+			tempFile = filepath.Join(dm.TempFolder, tempFile)
+			downloaded := getFileSize(tempFile)
+			// fmt.Println(downloaded)
+			// os.Exit(0)
+			download.PartDownloaders = append(
+				download.PartDownloaders,
+				&PartDownloader{Index: i, Start: start + downloaded, Downloaded: downloaded, End: end, TempFile: tempFile},
+			)
+
+		}
+	} else {
+		download.PartDownloaders = append(download.PartDownloaders, &PartDownloader{
+			Index: 0,
+			Start: 0,
+			End:   0,
+			TempFile: filepath.Join(dm.TempFolder,
+				fmt.Sprintf(
+					download.OutputFile+"-d%d-part-%d.tmp",
+					download.ID,
+					0,
 				),
-			})
-		}
-		if download.Status == "initializing" {
-			download.Status = "pending"
-		}
-	}()
+			),
+		})
+	}
+	if download.Status == "initializing" {
+		download.Status = "pending"
+	}
 }
 
 func (dm *DownloadManager) PauseDownload(download *Download) {
@@ -166,15 +170,13 @@ func (dm *DownloadManager) PauseDownload(download *Download) {
 
 func (dm *DownloadManager) ResumeDownload(download *Download) {
 	download.Status = "initializing"
+	go dm.initializeDownload(download)
 }
 
 func (dm *DownloadManager) RetryDownload(download *Download) {
 	download.Status = "initializing"
 	download.Temps.Retries = 0
-	for _, p := range download.PartDownloaders {
-		p.IsFailed = false
-		p.IsPaused = false
-	}
+	go dm.initializeDownload(download)
 }
 
 func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitGroup) {
@@ -215,6 +217,7 @@ func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitG
 		IsDone := true
 		IsPaused := false
 		for _, part := range download.PartDownloaders {
+			part.Speed = 0
 			if part.IsPaused {
 				IsPaused = true
 				IsDone = false
