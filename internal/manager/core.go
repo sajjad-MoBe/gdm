@@ -26,6 +26,7 @@ func NewManager(maxParts, partSize int) *DownloadManager {
 
 func (dm *DownloadManager) AddQueue(queue *Queue) {
 	queue.IsActive = false
+	queue.IsDeleted = false
 	queue.PartDownloaders = make(chan *PartDownloader, queue.MaxConcurrentDownloads)
 	dm.Queues = append(dm.Queues, queue)
 	if queue.MaxBandwidth > 0 {
@@ -33,6 +34,9 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 	}
 	go func() {
 		for {
+			if queue.IsDeleted {
+				return
+			}
 			if IsWithinActiveHours(queue.ActiveStartTime, queue.ActiveEndTime) {
 				queue.IsActive = true
 				for _, download := range queue.Downloads {
@@ -183,13 +187,16 @@ func (dm *DownloadManager) RetryDownload(download *Download) {
 
 func (dm *DownloadManager) DeleteDownload(download *Download) {
 	download.Status = "paused"
-	var updatedDownloads []*Download
-	for _, d := range download.Queue.Downloads {
-		if d.ID != download.ID {
-			updatedDownloads = append(updatedDownloads, d)
+	if !download.Queue.IsDeleted {
+
+		var updatedDownloads []*Download
+		for _, d := range download.Queue.Downloads {
+			if d.ID != download.ID {
+				updatedDownloads = append(updatedDownloads, d)
+			}
 		}
+		download.Queue.Downloads = updatedDownloads
 	}
-	download.Queue.Downloads = updatedDownloads
 	go func() {
 		time.Sleep(time.Second) // ensure download is paused
 		for _, pd := range download.PartDownloaders {
@@ -197,6 +204,14 @@ func (dm *DownloadManager) DeleteDownload(download *Download) {
 		}
 	}()
 
+}
+func (dm *DownloadManager) DeleteQueue(queue *Queue) {
+	queue.IsActive = false
+	queue.IsDeleted = true
+
+	for _, d := range queue.Downloads {
+		dm.DeleteDownload(d)
+	}
 }
 
 func (dm *DownloadManager) startDownload(download *Download, StartWG *sync.WaitGroup) {

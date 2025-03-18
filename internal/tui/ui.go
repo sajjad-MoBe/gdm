@@ -196,6 +196,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "d": // Delete selected download
 			if m.currentTab == tabDownloads {
 				m.deleteDownload()
+			} else if m.currentTab == tabQueues {
+				m.deleteQueue()
 			}
 		case "p": // Pause/Resume selected download
 			if m.currentTab == tabDownloads {

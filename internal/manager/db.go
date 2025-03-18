@@ -102,3 +102,6 @@ func GetAllDownloads(downloads *[]*Download) error {
 func Save(model interface{}) error {
 	return GetDB().Save(model).Error
 }
+func Delete(model interface{}) error {
+	return GetDB().Delete(model).Error
+}

@@ -221,13 +221,38 @@ func (m *Model) deleteDownload() {
 		// Remove the row from the table by slicing the rows
 		newRows := append(m.downloadsTable.Rows()[:m.selectedRow], m.downloadsTable.Rows()[m.selectedRow+1:]...)
 
-		download := m.downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
+		index := m.downloadsTable.Rows()[m.selectedRow][0]
+		download := m.downloads[index]
 		m.downloadmanager.DeleteDownload(download)
-
-		delete(m.downloads, strconv.Itoa(m.selectedRow))
+		manager.Delete(download)
+		delete(m.downloads, index)
 
 		// Update the downloadsTable with the new rows
 		m.downloadsTable = table.New(
+			table.WithColumns(downloadColumns), // Keep the existing columns
+			table.WithRows(newRows),            // Set the new rows
+		)
+
+		// Adjust the selected row to prevent out of bounds error if the last row is deleted
+		if m.selectedRow >= len(newRows) {
+			m.selectedRow = len(newRows) - 1
+		}
+	}
+}
+
+func (m *Model) deleteQueue() {
+	if m.selectedRow >= 0 && m.selectedRow < len(m.queuesTable.Rows()) {
+		// Remove the row from the table by slicing the rows
+		newRows := append(m.queuesTable.Rows()[:m.selectedRow], m.queuesTable.Rows()[m.selectedRow+1:]...)
+
+		index := m.queuesTable.Rows()[m.selectedRow][0]
+		queue := m.queues[index]
+		m.downloadmanager.DeleteQueue(queue)
+		manager.Delete(queue)
+		delete(m.queues, index)
+
+		// Update the queuesTable with the new rows
+		m.queuesTable = table.New(
 			table.WithColumns(downloadColumns), // Keep the existing columns
 			table.WithRows(newRows),            // Set the new rows
 		)

@@ -11,6 +11,7 @@ type Queue struct {
 	Downloads                 []*Download          `gorm:"-"`
 	tokenBucket               chan struct{}        `gorm:"-"`
 	ticker                    *time.Ticker         `gorm:"-"`
+	IsDeleted                 bool                 `gorm:"-"`
 	ID                        int                  `gorm:"primaryKey" json:"id"`
 	IsActive                  bool                 `gorm:"default:false" json:"is_active"`
 	SaveDir                   string               `json:"save_dir"`
@@ -76,7 +77,7 @@ func (d *Download) GetSpeed() int {
 	return totalKB
 }
 func (d *Download) GetProgress() int {
-	if d.TotalSize == 0 {
+	if d.TotalSize == 0 || d.Temps == nil {
 		return 0
 	}
 	return int(d.Temps.TotalDownloaded * 100 / d.TotalSize)
