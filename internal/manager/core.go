@@ -85,6 +85,7 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 	}
 	download.Temps = &DownloadTemps{0, 0, time.Now(), &sync.Mutex{}}
 	download.IsActive = false
+	download.IsDeleted = false
 
 	if download.Status != "failed" && download.Status != "paused" {
 		download.Status = "initializing"
@@ -187,6 +188,7 @@ func (dm *DownloadManager) RetryDownload(download *Download) {
 
 func (dm *DownloadManager) DeleteDownload(download *Download) {
 	download.Status = "paused"
+	download.IsDeleted = true
 	if !download.Queue.IsDeleted {
 
 		var updatedDownloads []*Download
@@ -206,6 +208,7 @@ func (dm *DownloadManager) DeleteDownload(download *Download) {
 
 }
 func (dm *DownloadManager) DeleteQueue(queue *Queue) {
+
 	queue.IsActive = false
 	queue.IsDeleted = true
 
@@ -345,7 +348,7 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 		if err == io.EOF {
 			break
 		}
-		if !download.Queue.IsActive || download.Status == "paused" {
+		if !download.Queue.IsActive || download.IsDeleted || download.Status == "paused" {
 			partDownloader.IsPaused = true
 			break
 		}

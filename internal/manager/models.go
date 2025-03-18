@@ -30,6 +30,7 @@ func (q Queue) FilterValue() string {
 type Download struct {
 	Temps           *DownloadTemps    `gorm:"-"`
 	PartDownloaders []*PartDownloader `gorm:"-"`
+	IsDeleted       bool              `gorm:"-"`
 	ID              int               `gorm:"primaryKey" json:"id"`
 	QueueID         int               `gorm:"not null" json:"queue_id"`
 	IsActive        bool              `gorm:"default:false" json:"is_active"`

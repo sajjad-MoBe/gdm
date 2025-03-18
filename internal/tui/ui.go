@@ -471,6 +471,35 @@ func (m *Model) renderQueueFormForEdit() string {
 
 func NewModel() *Model {
 	manager.InitializeDB()
+
+	manager.Create(&manager.Download{
+		QueueID: 10,
+		// Queue:      &queue2,
+		Status:     "pending",
+		OutputFile: "10mb.zip",
+		URL:        "http://212.183.159.230/10MB.zip",
+	})
+	manager.Create(&manager.Download{
+		QueueID: 10,
+		// Queue:      &queue2,
+		Status:     "pending",
+		OutputFile: "10mb.zip",
+		URL:        "http://212.183.159.230/10MB.zip",
+	})
+	manager.Create(&manager.Download{
+		QueueID: 11,
+		// Queue:      &queue2,
+		Status:     "pending",
+		OutputFile: "10mb.zip",
+		URL:        "https://150.uptv.ir/uptv/animation/1712405Garden_Party_2017_720p_UPTVz.co171240557.mkv",
+	})
+	manager.Create(&manager.Download{
+		QueueID: 11,
+		// Queue:      &queue2,
+		Status:     "pending",
+		OutputFile: "10mb.zip",
+		URL:        "https://150.uptv.ir/uptv/animation/1712405Garden_Party_2017_720p_UPTVz.co171240557.mkv",
+	})
 	MaxParts := 10 // Maximum number of parts for one download
 	PartSize := 10 // create new part downloader per each PartSize mb
 	downloadmanager := manager.NewManager(MaxParts, PartSize)
@@ -520,6 +549,10 @@ func NewModel() *Model {
 	downloadsMap := make(map[string]*manager.Download)
 	for _, row := range downloads {
 		// row.QueueID = queuesMap[strconv.Itoa(row.QueueID)].ID
+		if row.Queue == nil {
+			manager.Delete(row)
+			continue
+		}
 		row.Queue = queuesMap[strconv.Itoa(row.QueueID)]
 		// manager.Save(row)
 
@@ -572,36 +605,41 @@ func NewModel() *Model {
 }
 
 func (m *Model) updateDownloadTable() {
-	downloadRows := m.downloadsTable.Rows()
-	for index, row := range downloadRows {
+	var downloadRows []table.Row
+
+	for _, row := range m.downloadsTable.Rows() {
 		download := m.downloads[row[0]]
-		downloadRows[index][2] = download.GetStatus()
+		if download == nil || download.IsDeleted || download.Queue == nil {
+			continue
+		}
+		row[2] = download.GetStatus()
 
 		if download.IsPartial {
 			switch download.Status {
 			case "finished":
-				downloadRows[index][3] = "100%"
+				row[3] = "100%"
 			case "initializing":
-				downloadRows[index][3] = "N/A"
+				row[3] = "N/A"
 			default:
-				downloadRows[index][3] = strconv.Itoa(download.GetProgress()) + "%"
+				row[3] = strconv.Itoa(download.GetProgress()) + "%"
 
 			}
 		} else {
-			downloadRows[index][3] = "?"
+			row[3] = "?"
 		}
 
 		if download.GetStatus() != "downloading" {
-			downloadRows[index][4] = "-"
+			row[4] = "-"
 		} else {
 			speed := download.GetSpeed()
 			if speed > 1024 {
-				downloadRows[index][4] = fmt.Sprintf("%.1f", float32(speed)/1024) + "Mb/s"
+				row[4] = fmt.Sprintf("%.1f", float32(speed)/1024) + "Mb/s"
 			} else {
-				downloadRows[index][4] = strconv.Itoa(download.GetSpeed()) + "Kb/s"
+				row[4] = strconv.Itoa(download.GetSpeed()) + "Kb/s"
 			}
-			downloadRows[index][4] = strconv.Itoa(download.GetSpeed())
+			row[4] = strconv.Itoa(download.GetSpeed())
 		}
+		downloadRows = append(downloadRows, row)
 	}
 	m.downloadsTable.SetRows(downloadRows)
 }

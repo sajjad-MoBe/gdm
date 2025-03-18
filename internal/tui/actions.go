@@ -223,13 +223,16 @@ func (m *Model) togglePauseDownload() {
 func (m *Model) deleteDownload() {
 	if m.selectedRow >= 0 && m.selectedRow < len(m.downloadsTable.Rows()) {
 		// Remove the row from the table by slicing the rows
-		newRows := append(m.downloadsTable.Rows()[:m.selectedRow], m.downloadsTable.Rows()[m.selectedRow+1:]...)
 
 		index := m.downloadsTable.Rows()[m.selectedRow][0]
 		download := m.downloads[index]
 		m.downloadmanager.DeleteDownload(download)
 		manager.Delete(download)
+		// manager.CommitChanges()
+		// m.downloads[index] = nil
 		delete(m.downloads, index)
+
+		newRows := append(m.downloadsTable.Rows()[:m.selectedRow], m.downloadsTable.Rows()[m.selectedRow+1:]...)
 
 		// Update the downloadsTable with the new rows
 		m.downloadsTable = table.New(
@@ -247,15 +250,21 @@ func (m *Model) deleteDownload() {
 func (m *Model) deleteQueue() {
 	if m.selectedRow >= 0 && m.selectedRow < len(m.queuesTable.Rows()) {
 		// Remove the row from the table by slicing the rows
-		newRows := append(m.queuesTable.Rows()[:m.selectedRow], m.queuesTable.Rows()[m.selectedRow+1:]...)
 
 		index := m.queuesTable.Rows()[m.selectedRow][0]
 		queue := m.queues[index]
 		m.downloadmanager.DeleteQueue(queue)
+		for _, download := range queue.Downloads {
+			manager.Delete(download)
+			delete(m.downloads, strconv.Itoa(download.ID))
+		}
 		manager.Delete(queue)
+		// manager.CommitChanges() // ensure all instances are deleted
+		// m.queues[index] = nil
 		delete(m.queues, index)
 
 		// Update the queuesTable with the new rows
+		newRows := append(m.queuesTable.Rows()[:m.selectedRow], m.queuesTable.Rows()[m.selectedRow+1:]...)
 		m.queuesTable = table.New(
 			table.WithColumns(queueColumns), // Keep the existing columns
 			table.WithRows(newRows),         // Set the new rows
@@ -374,9 +383,9 @@ func (m *Model) addNewQueue(queue *manager.Queue) {
 
 	newRow := table.Row{
 		strconv.Itoa(queue.ID),
+		queue.SaveDir,
 		strconv.Itoa(queue.MaxConcurrentDownloads),
 		strconv.Itoa(queue.MaxBandwidth),
-		queue.SaveDir,
 		queue.ActiveStartTime,
 		queue.ActiveEndTime,
 	}

@@ -1,7 +1,6 @@
 package manager
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -25,7 +24,7 @@ func InitializeDB() {
 	}
 
 	dbPath := filepath.Join(appConfigDir, "database.db")
-	fmt.Println("Database path:", dbPath)
+	// fmt.Println("Database path:", dbPath)
 	db := sqlite.Open(dbPath)
 
 	gormDB, err := gorm.Open(db, &gorm.Config{})
@@ -103,5 +102,9 @@ func Save(model interface{}) error {
 	return GetDB().Save(model).Error
 }
 func Delete(model interface{}) error {
-	return GetDB().Delete(model).Error
+	err := GetDB().Delete(model).Error
+	return err
+}
+func CommitChanges() {
+	GetDB().Commit()
 }
