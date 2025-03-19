@@ -81,7 +81,9 @@ type Model struct {
 	saveDirInput          textinput.Model
 	maxConcurrentInput    textinput.Model
 	maxBandwidthInput     textinput.Model
-	focusedFieldForQueues int // Use focusedFieldForQueues instead of focusedField
+	activeStartTimeInput  textinput.Model
+	activeEndTimeInput    textinput.Model
+	focusedFieldForQueues int
 	queues                map[string]*manager.Queue
 	downloads             map[string]*manager.Download
 
@@ -140,9 +142,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			return m, tea.Quit
-		case "left":
+		case "ctrl+left":
 			m.handleTabLeft()
-		case "right":
+		case "ctrl+right":
 			m.handleTabRight()
 		case "enter":
 			if m.currentTab == tabAddDownload {
@@ -185,7 +187,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateFocusedFieldForTab1()
 			}
 			if m.currentTab == tabQueues {
-				m.focusedFieldForQueues = (m.focusedFieldForQueues + 1) % 3
+				m.focusedFieldForQueues = (m.focusedFieldForQueues + 1) % 5
 				m.updateFocusedFieldForTab3()
 			}
 		case " ":
@@ -269,7 +271,7 @@ func (m *Model) View() string {
 }
 func (m *Model) renderQueuesTab(tabsRow string) string {
 	if m.newQueueForm {
-		return m.renderQueueForm() // Show the form if the user is adding/editing a queue
+		return m.renderQueueForm()
 	}
 	if m.editQueueForm {
 		return m.renderQueueFormForEdit()
@@ -427,7 +429,6 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 	return content
 }
 
-// Render the form for adding or editing a queue
 func (m *Model) renderQueueForm() string {
 	var content string
 
@@ -436,12 +437,13 @@ func (m *Model) renderQueueForm() string {
 
 	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
 	content += fmt.Sprintf(
-		"Save Directory: %s\nMax Concurrent: %s\nMax Bandwidth: %s\n\n",
+		"Save Directory: %s\nMax Concurrent: %s\nMax Bandwidth: %s\nActive Start Time: %s\nActive End Time: %s\n\n",
 		m.saveDirInput.View(),
 		m.maxConcurrentInput.View(),
 		m.maxBandwidthInput.View(),
+		m.activeStartTimeInput.View(),
+		m.activeEndTimeInput.View(),
 	)
-
 	// Add instructions
 	content += "\nPress Enter to submit, ESC to cancel.\n"
 
@@ -457,10 +459,12 @@ func (m *Model) renderQueueFormForEdit() string {
 
 	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
 	content += fmt.Sprintf(
-		"Save Directory: %s\nMax Concurrent: %s\nMax Bandwidth: %s\n\n",
+		"Save Directory: %s\nMax Concurrent: %s\nMax Bandwidth: %s\nActive Start Time: %s\nActive End Time: %s\n\n",
 		m.saveDirInput.View(),
 		m.maxConcurrentInput.View(),
 		m.maxBandwidthInput.View(),
+		m.activeStartTimeInput.View(),
+		m.activeEndTimeInput.View(),
 	)
 
 	// Add instructions
@@ -552,6 +556,11 @@ func NewModel() *Model {
 	maxBandwidthInput := textinput.New()
 	maxBandwidthInput.Placeholder = "Enter Max Bandwidth"
 
+	activeStartTimeInput := textinput.New()
+	activeStartTimeInput.Placeholder = "Enter Active Start Time"
+	activeEndTimeInput := textinput.New()
+	activeEndTimeInput.Placeholder = "Enter Active End Time"
+
 	return &Model{
 		currentTab:            tabAddDownload,
 		inputURL:              ti,
@@ -568,6 +577,8 @@ func NewModel() *Model {
 		saveDirInput:          saveDirInput,
 		maxConcurrentInput:    maxConcurrentInput,
 		maxBandwidthInput:     maxBandwidthInput,
+		activeStartTimeInput:  activeStartTimeInput,
+		activeEndTimeInput:    activeEndTimeInput,
 		focusedFieldForQueues: 0, // Focus on Save Directory initially
 		queues:                queuesMap,
 		downloads:             downloadsMap,

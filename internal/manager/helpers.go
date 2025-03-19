@@ -12,7 +12,9 @@ import (
 )
 
 func IsWithinActiveHours(start, end string) bool {
+
 	now := time.Now()
+	//fmt.Println("Current time:", now)
 	startTime, err := time.Parse("15:04", start)
 	if err != nil {
 		return true
@@ -21,10 +23,10 @@ func IsWithinActiveHours(start, end string) bool {
 	if err != nil {
 		return true
 	}
-	return now.Hour() >= startTime.Hour() &&
-		now.Minute() >= startTime.Minute() &&
-		now.Hour() <= endTime.Hour() &&
-		now.Minute() <= endTime.Minute()
+	return (now.Hour() > startTime.Hour() ||
+		(now.Minute() >= startTime.Minute() && now.Hour() == startTime.Hour())) &&
+		(now.Hour() < endTime.Hour() ||
+			(now.Hour() == endTime.Hour() && now.Minute() <= endTime.Minute()))
 }
 
 func getFileSize(file string) int64 {

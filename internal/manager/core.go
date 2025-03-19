@@ -70,7 +70,8 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 
 				}
 			} else {
-				fmt.Println("quqeue", queue.ID, "not working")
+				//TODO
+				//fmt.Println("queue ", queue.ID, " not working!")
 				queue.IsActive = false
 			}
 			// fmt.Printf("\n%s", progress)
