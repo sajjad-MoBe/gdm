@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -16,6 +17,9 @@ import (
 
 // Global Variables
 var counterForForms = 0
+var regForConcurrent = regexp.MustCompile(`^([1-9][0-9]{0,2}|200)$`)
+var regForMaxBW = regexp.MustCompile(`^[1-9]\d*$|0`)
+var regForHHMMFormat = regexp.MustCompile(`^(?:[01]?[0-9]|2[0-3]):([0-5]?[0-9])$`)
 
 // Define your table columns for the Downloads tab
 var downloadColumns = []table.Column{
@@ -114,7 +118,7 @@ var (
 // Init initializes the UI
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(tickToUpdateDownloadTable())
-	// return textinput.Blink
+	// return textInput.Blink
 }
 
 func tickToUpdateDownloadTable() tea.Cmd {
@@ -228,6 +232,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if counterForForms == 1 {
 		counterForForms = counterForForms + 1
 	}
+	m.clearMessages()
 
 	return m, cmd
 }
@@ -269,6 +274,7 @@ func (m *Model) View() string {
 
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).Render(content)
 }
+
 func (m *Model) renderQueuesTab(tabsRow string) string {
 	if m.newQueueForm {
 		return m.renderQueueForm()
@@ -318,6 +324,15 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 
 	// Wrap the table content in a box style and add it to the final view
 	content += tableStyle.Render(tableContent)
+
+	// Show the confirmation message if it exists
+	if m.confirmationMessage != "" {
+		content += fmt.Sprintf("\n\n%s", m.confirmationMessage)
+	}
+	// Show the error message in red if it exists
+	if m.errorMessage != "" {
+		content += fmt.Sprintf("\n\n%s", redErrorStyle.Render(m.errorMessage))
+	}
 
 	return content
 }

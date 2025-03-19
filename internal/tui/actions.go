@@ -31,7 +31,7 @@ func (m *Model) handleNewDownloadSubmit() {
 	if m.inputURL.Value() == "" {
 		m.showURLValidationError()
 	} else {
-		// Create a new download with the data entered in the fields
+		// Create a new download with the data entered in fields
 		downloadURL := m.inputURL.Value()
 		// validate download url
 
@@ -82,25 +82,6 @@ func (m *Model) addNewDownload(download *manager.Download) {
 	)
 }
 
-func (m *Model) showURLValidationError() {
-	m.errorMessage = "URL is required!"
-	m.confirmationMessage = ""
-	m.errorTime = time.Now()
-
-	m.resetFieldsForTab1()
-	m.focusedField = 0
-	m.inputURL.Focus()
-}
-
-func (m *Model) showDownloadConfirmation() {
-	m.confirmationMessage = "Download has been added, press right button to show Downloads!"
-	m.confirmationTime = time.Now()
-
-	m.resetFieldsForTab1()
-	m.focusedField = 0
-	m.inputURL.Focus()
-}
-
 func (m *Model) resetFieldsForTab1() {
 	m.inputURL.SetValue("")
 	m.queueSelect.ResetSelected()
@@ -108,12 +89,13 @@ func (m *Model) resetFieldsForTab1() {
 	m.selectedQueueRowIndex = 0
 }
 
-// unused
-// func (m *Model) resetFieldsForTab3() {
-// 	m.saveDirInput.SetValue("")
-// 	m.maxConcurrentInput.SetValue("")
-// 	m.maxBandwidthInput.SetValue("")
-// }
+func (m *Model) resetFieldsForTab3() {
+	m.saveDirInput.SetValue("")
+	m.maxBandwidthInput.SetValue("")
+	m.maxConcurrentInput.SetValue("")
+	m.activeStartTimeInput.SetValue("")
+	m.activeEndTimeInput.SetValue("")
+}
 
 func (m *Model) handleUpArrowForTab1() {
 	if m.focusedField == 1 {
@@ -321,33 +303,28 @@ func (m *Model) updateFocusedField(msg tea.Msg) {
 	}
 }
 
-// unused
-// func (m *Model) updateFocusedFieldForQueue(msg tea.Msg) {
-// 	if m.focusedFieldForQueues == 0 {
-// 		m.saveDirInput.Update(msg)
-// 	} else if m.focusedFieldForQueues == 1 {
-// 		m.maxConcurrentInput.Update(msg)
-// 	} else if m.focusedFieldForQueues == 2 {
-// 		m.maxBandwidthInput.Update(msg)
-// 	}
-// }
+func (m *Model) updateFocusedFieldForQueue(msg tea.Msg) {
+	if m.focusedFieldForQueues == 0 {
+		m.saveDirInput.Update(msg)
+	} else if m.focusedFieldForQueues == 1 {
+		m.maxConcurrentInput.Update(msg)
+	} else if m.focusedFieldForQueues == 2 {
+		m.maxBandwidthInput.Update(msg)
+	}
+}
 
 // Handle the submission of a new queue form
 func (m *Model) handleNewOrEditQueueFormSubmit() {
 	if m.newQueueForm || m.editQueueForm {
-		// Create a new QueueItem with the data entered in fields
-		MaxConcurrentDownloads, err := strconv.Atoi(m.maxConcurrentInput.Value())
-		if err != nil {
-			// show error
-			fmt.Println("Error:", err)
+
+		errorCode := m.CheckErrorCodes()
+		if errorCode == 1 {
+			m.handleCancel()
 			return
 		}
-		MaxBandwidth, err := strconv.Atoi(m.maxBandwidthInput.Value())
-		if err != nil {
-			// show error
-			fmt.Println("Error:", err)
-			return
-		}
+
+		MaxConcurrentDownloads, _ := strconv.Atoi(m.maxConcurrentInput.Value())
+		MaxBandwidth, _ := strconv.Atoi(m.maxBandwidthInput.Value())
 
 		if m.editQueueForm {
 			if m.selectedRow >= 0 && m.selectedRow < len(m.queuesTable.Rows()) {
@@ -361,10 +338,11 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 				if thisQueue.MaxBandwidth != MaxBandwidth {
 					thisQueue.SetBandwith(MaxBandwidth)
 				}
-				// Editing this existing queue
 
 				m.editQueue(oldQueue, thisQueue)
-
+				m.newQueueForm = false
+				m.editQueueForm = false
+				m.showEditQConfirmation()
 			}
 		} else {
 			newQueue := manager.Queue{
@@ -376,11 +354,13 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 			}
 			// Adding a new queue
 			m.addNewQueue(&newQueue)
+			m.newQueueForm = false
+			m.editQueueForm = false
+			m.showAddQConfirmation()
 		}
 
 		// Reset the form after submission
-		m.newQueueForm = false
-		m.editQueueForm = false
+
 		m.saveDirInput.Reset()
 		m.maxConcurrentInput.Reset()
 		m.maxBandwidthInput.Reset()
@@ -523,8 +503,6 @@ func (m *Model) updateBasedOnInputForTab1(msg tea.Msg, _ tea.Cmd) {
 		} else if m.focusedField == 2 {
 			m.outputFileName, _ = m.outputFileName.Update(msg)
 		}
-		// Clear messages if necessary
-		m.clearMessages()
 		// Update the focused field accordingly
 		m.updateFocusedField(msg)
 	}
@@ -545,6 +523,5 @@ func (m *Model) updateBasedOnInputForTab3(msg tea.Msg, _ tea.Cmd) {
 		case 4:
 			m.activeEndTimeInput, _ = m.activeEndTimeInput.Update(msg)
 		}
-		//m.updateFocusedFieldForTab1()
 	}
 }
