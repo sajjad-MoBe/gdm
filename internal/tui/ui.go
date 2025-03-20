@@ -26,9 +26,9 @@ var downloadColumns = []table.Column{
 	{Title: "Download ID", Width: 10},
 	{Title: "Queue ID", Width: 10},
 	{Title: "URL", Width: 60},
-	{Title: "Status", Width: 15},
+	{Title: "Status", Width: 10},
 	{Title: "Progress", Width: 10},
-	{Title: "Speed", Width: 15},
+	{Title: "Speed", Width: 10},
 	{Title: "Retries", Width: 10},
 }
 
@@ -42,11 +42,11 @@ var downloadColumns = []table.Column{
 
 // Define your table columns for the Queues tab
 var queueColumns = []table.Column{
-	{Title: "Queue ID", Width: 15},
+	{Title: "Queue ID", Width: 10},
 	{Title: "SaveDir", Width: 60},
-	{Title: "Max Concurrent", Width: 15},
-	{Title: "Max Bandwidth", Width: 15},
-	{Title: "Max Retries", Width: 15},
+	{Title: "Max Concurrent", Width: 10},
+	{Title: "Max Bandwidth", Width: 10},
+	{Title: "Max Retries", Width: 10},
 	{Title: "Active Start Time", Width: 20},
 	{Title: "Active End Time", Width: 20},
 }
@@ -722,7 +722,6 @@ func NewModel() *Model {
 			"0",
 		})
 	}
-	fmt.Println(maxQueueID, maxDownloadID)
 	// Initialize the Downloads table using WithColumns option
 	downloadsTable := table.New(
 		table.WithColumns(downloadColumns), // Specify columns with WithColumns
