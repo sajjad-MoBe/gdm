@@ -19,7 +19,7 @@ import (
 var counterForForms = 0
 var regForConcurrent = regexp.MustCompile(`^([1-9][0-9]{0,2}|200)$`)
 var regForMaxBW = regexp.MustCompile(`^[1-9]\d*$|0`)
-var regForHHMMFormat = regexp.MustCompile(`^(?:[01]?[0-9]|2[0-3]):([0-5]?[0-9])$`)
+var regForHHMMFormat = regexp.MustCompile(`^(?:[01]?[0-9]|2[0-3]):([0-5]?[0-9])$|^$`)
 
 // Define your table columns for the Downloads tab
 var downloadColumns = []table.Column{
@@ -272,32 +272,52 @@ func (m *Model) View() string {
 }
 
 func (m *Model) renderHelpPage(tabsRow string) string {
-	helpContent := fmt.Sprintf("%s\n\n", tabsRow)
+	// Style the tabs row with a bold font, background color, and padding.
+	helpContent := fmt.Sprintf("%s\n", tabsRow)
 
-	helpContent += lipgloss.NewStyle().Underline(true).Render("Add Download Tab:") + "\n"
-	helpContent += "  Enter: Submits the new download form.\n"
-	helpContent += "  Up/Down Arrows: Navigate through the queue list.\n"
-	helpContent += "  Tab: Cycles focus among URL, queue selection, and output file name.\n"
-	helpContent += "  \"-\": Resets focus back to the URL input field.\n\n"
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Background(lipgloss.Color("#3498db")).
+		Foreground(lipgloss.Color("15")).
+		BorderForeground(lipgloss.Color("#2980b9"))
+	// Define a style for non-header texts: italic with a chosen color.
+	textStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#FFC0CB"))
 
-	helpContent += lipgloss.NewStyle().Underline(true).Render("Downloads Tab:") + "\n"
-	helpContent += "  Up/Down Arrows: Navigate through the list of downloads.\n"
-	helpContent += "  D: Deletes the selected download.\n"
-	helpContent += "  P: Pauses or resumes the selected download.\n"
-	helpContent += "  R: Retries the selected download if it has failed.\n\n"
+	// Define a different style for Global Keys non-header texts.
+	globalTextStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#F39C12"))
 
-	helpContent += lipgloss.NewStyle().Underline(true).Render("Queues Tab:") + "\n"
-	helpContent += "  Up/Down Arrows: Navigate through the list of queues.\n"
-	helpContent += "  N: Opens the form for adding a new queue.\n"
-	helpContent += "  E: Opens the form for editing the currently selected queue.\n"
-	helpContent += "  Enter: Submits the queue form (new or edit).\n"
-	helpContent += "  Tab: Cycles through the fields in the queue form.\n"
-	helpContent += "  \"-\": Cancels the current queue form and resets the fields.\n"
-	helpContent += "  D: Deletes the selected queue.\n\n"
+	// Add Download Tab section.
+	helpContent += headerStyle.Render("Add Download Tab:") + "\n"
+	helpContent += textStyle.Render("  Enter: Submits the new download form.") + "\n"
+	helpContent += textStyle.Render("  Up/Down Arrows: Navigate through the queue list.") + "\n"
+	helpContent += textStyle.Render("  Tab: Cycles focus among URL, queue selection, and output file name.") + "\n"
+	helpContent += textStyle.Render("  \"-\": Resets focus back to the URL input field.") + "\n"
 
-	helpContent += "Global Keys:\n"
-	helpContent += "  *: Exit help mode when active."
-	helpContent += "ctrl+right/left: Navigate through the tabs"
+	// Downloads Tab section.
+	helpContent += headerStyle.Render("Downloads Tab:") + "\n"
+	helpContent += textStyle.Render("  Up/Down Arrows: Navigate through the list of downloads.") + "\n"
+	helpContent += textStyle.Render("  D: Deletes the selected download.") + "\n"
+	helpContent += textStyle.Render("  P: Pauses or resumes the selected download.") + "\n"
+	helpContent += textStyle.Render("  R: Retries the selected download if it has failed.") + "\n"
+
+	// Queues Tab section.
+	helpContent += headerStyle.Render("Queues Tab:") + "\n"
+	helpContent += textStyle.Render("  Up/Down Arrows: Navigate through the list of queues.") + "\n"
+	helpContent += textStyle.Render("  N: Opens the form for adding a new queue.") + "\n"
+	helpContent += textStyle.Render("  E: Opens the form for editing the currently selected queue.") + "\n"
+	helpContent += textStyle.Render("  Enter: Submits the queue form (new or edit).") + "\n"
+	helpContent += textStyle.Render("  Tab: Cycles through the fields in the queue form.") + "\n"
+	helpContent += textStyle.Render("  \"-\": Cancels the current queue form and resets the fields.") + "\n"
+	helpContent += textStyle.Render("  D: Deletes the selected queue.") + "\n"
+
+	// Global keys section.
+	helpContent += headerStyle.Render("Global Keys:") + "\n"
+	helpContent += globalTextStyle.Render("  *: Exit help mode when active.") + "\n"
+	helpContent += globalTextStyle.Render("  ctrl+right/left: Navigate through the tabs") + "\n"
 
 	return helpContent
 }
@@ -310,67 +330,90 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 		return m.renderQueueFormForEdit()
 	}
 
-	// Custom styles for the table
 	columns := queueColumns
-	tableStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true).BorderForeground(lipgloss.Color("5")).Padding(1)
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("4"))                           // Header color
-	rowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))                                         // Row color
-	alternateRowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))                                // Alternate row color
-	selectedRowStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("0")) // Highlighted row
 
-	content := fmt.Sprintf(
-		"%s\n\n",
-		tabsRow,
-	)
+	// Define a table style with rounded borders, padding, and margin.
+	tableStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("5")).
+		Padding(1).
+		Margin(1)
 
-	// Render the headers
-	tableContent := ""
-	for _, column := range columns {
-		tableContent += headerStyle.Render(fmt.Sprintf("%-*s", column.Width, column.Title))
-	}
-	tableContent += "\n"
-
-	// Render the rows with their states
-	for rowIndex, row := range m.queuesTable.Rows() {
-		var styledRow string
-		for colIndex, cell := range row {
-			// Highlight the selected row
-			if rowIndex == m.selectedRow {
-				styledRow += selectedRowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
-			} else {
-				// Alternate row colors for better readability
-				if rowIndex%2 == 0 {
-					styledRow += rowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
-				} else {
-					styledRow += alternateRowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
-				}
-			}
+	// Build the header row with colorful cells.
+	headerRow := ""
+	for i, column := range columns {
+		// Alternate between lemon yellow (odd) and sky blue (even)
+		bgColor := "#87CEEB" // Sky blue for even columns
+		if i%2 == 0 {
+			bgColor = "#FFFF9F" // Lemon yellow for odd columns
 		}
-		tableContent += styledRow + "\n"
+
+		headerCellStyle := lipgloss.NewStyle().
+			Bold(true).
+			Background(lipgloss.Color(bgColor)).
+			Foreground(lipgloss.Color("0")).
+			Padding(0, 2)
+		headerRow += headerCellStyle.Render(fmt.Sprintf("%-*s", column.Width, column.Title))
 	}
 
-	// Wrap the table content in a box style and add it to the final view
-	content += tableStyle.Render(tableContent)
+	// Build table rows with colorful cells.
+	var tableRows []string
+	tableRows = append(tableRows, headerRow)
 
-	// Show the confirmation message if it exists
+	for rowIndex, row := range m.queuesTable.Rows() {
+		rowStr := ""
+		for colIndex, cell := range row {
+			// Alternate between lemon yellow (odd) and sky blue (even)
+			bgColor := "#87CEEB" // Sky blue for even columns
+			if colIndex%2 == 0 {
+				bgColor = "#FFFF9F" // Lemon yellow for odd columns
+			}
+
+			cellStyle := lipgloss.NewStyle().
+				Background(lipgloss.Color(bgColor)).
+				Foreground(lipgloss.Color("0")).
+				Padding(0, 2)
+
+			// If the row is selected, override with a distinct style.
+			if rowIndex == m.selectedRow {
+				cellStyle = cellStyle.Copy().
+					Background(lipgloss.Color("4")).
+					Foreground(lipgloss.Color("0"))
+			}
+
+			rowStr += cellStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
+		}
+		tableRows = append(tableRows, rowStr)
+	}
+
+	// Join all rows vertically.
+	tableContent := lipgloss.JoinVertical(lipgloss.Left, tableRows...)
+
+	// Assemble the final content.
+	content := fmt.Sprintf("%s\n\n%s", tabsRow, tableStyle.Render(tableContent))
 	if m.confirmationMessage != "" {
 		content += fmt.Sprintf("\n\n%s", m.confirmationMessage)
 	}
-	// Show the error message in red if it exists
 	if m.errorMessage != "" {
 		content += fmt.Sprintf("\n\n%s", redErrorStyle.Render(m.errorMessage))
 	}
-	content += "\nUse ctrl+right/left to navigate through the tabs."
+	navigationStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#F39C12"))
+	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("	  Use ctrl+right/left to navigate through the tabs."))
 	return content
 }
 
 func (m *Model) renderAddDownloadTab(tabsRow string) string {
+	// File Address field
 	var urlCursor string
 	if m.focusedField == 0 {
 		urlCursor = cursorStyle.Render("> ")
 	} else {
 		urlCursor = cursorStyle.Render("  ")
 	}
+
+	// Initialize content
 	content := fmt.Sprintf(
 		"%s\n\n%s\n%s\n%s\n\n",
 		tabsRow,
@@ -379,20 +422,23 @@ func (m *Model) renderAddDownloadTab(tabsRow string) string {
 		greenTitleStyle.Render("Queue Selection:"),
 	)
 
+	// Render queues with selection checkboxes
 	for i, item := range m.queuesTable.Rows() {
 		cursor := " "
 		checkbox := "[ ]"
 
 		if m.selectedQueueRowIndex == i {
 			if m.focusedField == 1 {
-				cursor = ">"
+				cursor = ">" // Highlight selected row
 			}
-			checkbox = "[" + checkmark + "]"
+			checkbox = "[" + checkmark + "]" // Display checkmark for selected queue
 		}
 
-		content += fmt.Sprintf("%s %s Queue %s\n", cursor, checkbox, item[0])
+		// Add each queue to content with indentation for clarity
+		content += fmt.Sprintf("  %s %s Queue %s\n", cursor, checkbox, item[0])
 	}
 
+	// Output File Name field
 	var outnameCursor string
 	if m.focusedField == 2 {
 		outnameCursor = cursorStyle.Render("> ")
@@ -400,22 +446,29 @@ func (m *Model) renderAddDownloadTab(tabsRow string) string {
 		outnameCursor = cursorStyle.Render("  ")
 	}
 
+	// Add output file name input to content
 	content += fmt.Sprintf(
 		"\n%s\n%s\n\n",
 		greenTitleStyle.Render("Output File Name (optional):"),
 		outnameCursor+m.outputFileName.View(),
 	)
 
-	// Show the error message in red if it exists
+	// Display error message (if any)
 	if m.errorMessage != "" {
 		content += fmt.Sprintf("\n\n%s", redErrorStyle.Render(m.errorMessage))
 	}
 
-	// Show the confirmation message if it exists
+	// Display confirmation message (if any)
 	if m.confirmationMessage != "" {
-		content += fmt.Sprintf("\n\n%s", m.confirmationMessage)
+		content += fmt.Sprintf("\n\n%s", greenTitleStyle.Render(m.confirmationMessage))
 	}
-	content += "\nUse ctrl+right/left to navigate through the tabs."
+
+	// Add navigation message with stylish formatting
+	navigationStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#F39C12"))
+
+	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("    Use ctrl+right/left to navigate through the tabs."))
 
 	return content
 }
@@ -424,93 +477,160 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 	// Get columns from global definition
 	columns := downloadColumns
 
-	// Custom styles for the table
-	tableStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), true).BorderForeground(lipgloss.Color("5")).Padding(1)
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("4"))                           // Header color
-	rowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))                                         // Row color
-	alternateRowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))                                // Alternate row color
-	selectedRowStyle := lipgloss.NewStyle().Background(lipgloss.Color("4")).Foreground(lipgloss.Color("0")) // Highlighted row
+	// Define a table style with rounded borders, padding, and margin.
+	tableStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("5")).
+		Padding(1).
+		Margin(1)
 
-	content := fmt.Sprintf(
-		"%s\n\n",
-		tabsRow,
-	)
-
-	// Render the headers
-	tableContent := ""
-	for _, column := range columns {
-		tableContent += headerStyle.Render(fmt.Sprintf("%-*s", column.Width, column.Title))
-	}
-	tableContent += "\n"
-
-	// Render the rows with their states
-	for rowIndex, row := range m.downloadsTable.Rows() {
-		var styledRow string
-		for colIndex, cell := range row {
-			// Highlight the selected row
-			if rowIndex == m.selectedRow {
-				styledRow += selectedRowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
-			} else {
-				// Alternate row colors for better readability
-				if rowIndex%2 == 0 {
-					styledRow += rowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
-				} else {
-					styledRow += alternateRowStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
-				}
-			}
+	// Build the header row with colorful cells.
+	headerRow := ""
+	for i, column := range columns {
+		// Alternate between lemon yellow (odd) and sky blue (even)
+		bgColor := "#87CEEB" // Sky blue for even columns
+		if i%2 == 0 {
+			bgColor = "#FFFF9F" // Lemon yellow for odd columns
 		}
-		tableContent += styledRow + "\n"
+
+		headerCellStyle := lipgloss.NewStyle().
+			Bold(true).
+			Background(lipgloss.Color(bgColor)).
+			Foreground(lipgloss.Color("0")).
+			Padding(0, 2)
+		headerRow += headerCellStyle.Render(fmt.Sprintf("%-*s", column.Width, column.Title))
 	}
 
-	// Wrap the table content in a box style and add it to the final view
-	content += tableStyle.Render(tableContent)
-	content += "\nUse ctrl+right/left to navigate through the tabs."
+	// Build table rows with colorful cells.
+	var tableRows []string
+	tableRows = append(tableRows, headerRow)
+
+	for rowIndex, row := range m.downloadsTable.Rows() {
+		rowStr := ""
+		for colIndex, cell := range row {
+			// Alternate between lemon yellow (odd) and sky blue (even)
+			bgColor := "#87CEEB" // Sky blue for even columns
+			if colIndex%2 == 0 {
+				bgColor = "#FFFF9F" // Lemon yellow for odd columns
+			}
+
+			cellStyle := lipgloss.NewStyle().
+				Background(lipgloss.Color(bgColor)).
+				Foreground(lipgloss.Color("0")).
+				Padding(0, 2)
+
+			// If the row is selected, override with a distinct style.
+			if rowIndex == m.selectedRow {
+				cellStyle = cellStyle.Copy().
+					Background(lipgloss.Color("4")).
+					Foreground(lipgloss.Color("0"))
+			}
+
+			rowStr += cellStyle.Render(fmt.Sprintf("%-*s", columns[colIndex].Width, cell))
+		}
+		tableRows = append(tableRows, rowStr)
+	}
+
+	// Join all rows vertically.
+	tableContent := lipgloss.JoinVertical(lipgloss.Left, tableRows...)
+
+	// Assemble the final content.
+	content := fmt.Sprintf("%s\n\n%s", tabsRow, tableStyle.Render(tableContent))
+	if m.confirmationMessage != "" {
+		content += fmt.Sprintf("\n\n%s", m.confirmationMessage)
+	}
+	if m.errorMessage != "" {
+		content += fmt.Sprintf("\n\n%s", redErrorStyle.Render(m.errorMessage))
+	}
+
+	// Apply the navigation style (italic and #F39C12 color)
+	navigationStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#F39C12"))
+
+	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("    Use ctrl+right/left to navigate through the tabs."))
 
 	return content
 }
 
 func (m *Model) renderQueueForm() string {
 	var content string
+	navigationStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#F39C12"))
+	// Define a style for yellow italic text
+	italicYellowStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#FFFF00"))
 
 	// Display the form header
-	content += "New Queue\n\n"
+	content += italicYellowStyle.Render("New Queue\n")
 
 	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
 	content += fmt.Sprintf(
-		"Save Directory: %s\nMax Concurrent: %s\nMax Bandwidth: %s\nActive Start Time: %s\nActive End Time: %s\n\n",
+		"%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n\n",
+		"",
+		italicYellowStyle.Render("Save Directory"),
 		m.saveDirInput.View(),
+		italicYellowStyle.Render("Max Concurrent"),
 		m.maxConcurrentInput.View(),
+		italicYellowStyle.Render("Max Bandwidth"),
 		m.maxBandwidthInput.View(),
+		italicYellowStyle.Render("Active Start Time"),
 		m.activeStartTimeInput.View(),
+		italicYellowStyle.Render("Active End Time"),
 		m.activeEndTimeInput.View(),
 	)
-	// Add instructions
-	content += "\nPress Enter to submit, or \"-\" to cancel.\n"
-	content += "Note: \nTime must be in HH:MM format.\nMax Concurrent must be an integer from 1 to 200.\nMax BandWidth must be an integer.\n"
+
+	// Add instructions with the same style
+	content += fmt.Sprintf("\n%s\n", italicYellowStyle.Render("Press Enter to submit, or \"-\" to cancel."))
+	content += fmt.Sprintf("%s\n", navigationStyle.Render("Note:"))
+	content += fmt.Sprintf("%s\n", navigationStyle.Render("Time must be in HH:MM format."))
+	content += fmt.Sprintf("%s\n", navigationStyle.Render("Max Concurrent must be an integer from 1 to 200."))
+	content += fmt.Sprintf("%s\n", navigationStyle.Render("Max Bandwidth must be an integer in KB/S. 0 makes no limit."))
 
 	return content
 }
 
-// Render the form for adding or editing a queue
 func (m *Model) renderQueueFormForEdit() string {
 	var content string
 
+	// Define the style for italic yellow text
+	italicYellowStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#FFFF00"))
+
+	// Define the style for italic golden yellow text for instructions
+	navigationStyle := lipgloss.NewStyle().
+		Italic(true).
+		Foreground(lipgloss.Color("#F39C12"))
+
 	// Display the form header
-	content += fmt.Sprintf("Edit Queue %d\n\n", m.selectedRow)
+	content += italicYellowStyle.Render(fmt.Sprintf("Edit Queue %d\n\n", m.selectedRow))
 
 	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
 	content += fmt.Sprintf(
-		"Save Directory: %s\nMax Concurrent: %s\nMax Bandwidth: %s\nActive Start Time: %s\nActive End Time: %s\n\n",
+		"%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n\n",
+		"",
+		italicYellowStyle.Render("Save Directory"),
 		m.saveDirInput.View(),
+		italicYellowStyle.Render("Max Concurrent"),
 		m.maxConcurrentInput.View(),
+		italicYellowStyle.Render("Max Bandwidth"),
 		m.maxBandwidthInput.View(),
+		italicYellowStyle.Render("Active Start Time"),
 		m.activeStartTimeInput.View(),
+		italicYellowStyle.Render("Active End Time"),
 		m.activeEndTimeInput.View(),
 	)
 
-	// Add instructions
-	content += "\nPress Enter to submit, or \"-\" to cancel.\n"
-	content += "Note: \nTime must be in HH:MM format.\nMax Concurrent must be an integer from 1 to 200.\nMax BandWidth must be an integer.\n"
+	// Add instructions with the same styling
+	content += fmt.Sprintf("\n%s\n", navigationStyle.Render("Press Enter to submit, or \"-\" to cancel."))
+	content += fmt.Sprintf("%s\n", navigationStyle.Render("Note:"))
+	content += fmt.Sprintf("%s\n", navigationStyle.Render("Time must be in HH:MM format."))
+	content += fmt.Sprintf("%s\n", navigationStyle.Render("Max Concurrent must be an integer from 1 to 200."))
+	content += fmt.Sprintf("%s\n", navigationStyle.Render("Max Bandwidth must be an integer in KB/S. 0 makes no limit."))
+
 	return content
 }
 
@@ -592,18 +712,18 @@ func NewModel() *Model {
 	saveDirInput.Placeholder = "Enter Save Directory"
 
 	maxConcurrentInput := textinput.New()
-	maxConcurrentInput.Placeholder = "Enter Max Concurrent"
+	maxConcurrentInput.Placeholder = "Enter Max Concurrent Downloads"
 
 	maxBandwidthInput := textinput.New()
-	maxBandwidthInput.Placeholder = "Enter Max Bandwidth"
+	maxBandwidthInput.Placeholder = "Enter Max Bandwidth. "
 
 	activeStartTimeInput := textinput.New()
-	activeStartTimeInput.Placeholder = "Enter Active Start Time"
+	activeStartTimeInput.Placeholder = "Default is 00:00"
 	activeEndTimeInput := textinput.New()
-	activeEndTimeInput.Placeholder = "Enter Active End Time"
+	activeEndTimeInput.Placeholder = "Default is 23:59"
 
 	return &Model{
-		currentTab:            tabAddDownload,
+		currentTab:            tabDownloads,
 		inputURL:              ti,
 		queueSelect:           queueSelect,
 		outputFileName:        outputFileName,

@@ -71,7 +71,7 @@ func (m *Model) setupsAfterErrorForQueues() {
 }
 
 func (m *Model) showDownloadConfirmation() {
-	m.confirmationMessage = "Download has been added, press right button to show Downloads!"
+	m.confirmationMessage = "Download has been added!"
 	m.confirmationTime = time.Now()
 
 	m.resetFieldsForTab1()

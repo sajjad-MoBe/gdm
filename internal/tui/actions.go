@@ -333,8 +333,19 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 				thisQueue := m.queues[oldQueue[0]]
 				thisQueue.SaveDir = m.saveDirInput.Value()
 				thisQueue.MaxConcurrentDownloads = MaxConcurrentDownloads
-				thisQueue.ActiveStartTime = m.activeStartTimeInput.Value()
-				thisQueue.ActiveEndTime = m.activeEndTimeInput.Value()
+
+				if m.activeStartTimeInput.Value() != "" {
+					thisQueue.ActiveStartTime = m.activeStartTimeInput.Value()
+				} else {
+					thisQueue.ActiveStartTime = "00:00"
+				}
+
+				if m.activeEndTimeInput.Value() != "" {
+					thisQueue.ActiveEndTime = m.activeEndTimeInput.Value()
+				} else {
+					thisQueue.ActiveEndTime = "23:59"
+				}
+
 				if thisQueue.MaxBandwidth != MaxBandwidth {
 					thisQueue.SetBandwith(MaxBandwidth)
 				}
