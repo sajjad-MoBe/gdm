@@ -20,7 +20,7 @@ func (m *Model) handleTabLeft() {
 }
 
 func (m *Model) handleTabRight() {
-	if m.currentTab < tabQueues && !m.newQueueForm && !m.editQueueForm {
+	if m.currentTab < tabHelp && !m.newQueueForm && !m.editQueueForm {
 		m.currentTab++
 		m.selectedRow = 0
 	}
@@ -99,7 +99,7 @@ func (m *Model) resetFieldsForTab3() {
 
 func (m *Model) handleUpArrowForTab1() {
 	if m.focusedField == 1 {
-		m.selectedQueueRowIndex = (m.selectedQueueRowIndex - 1) % len(m.queuesTable.Rows())
+		m.selectedQueueRowIndex = (m.selectedQueueRowIndex + len(m.queuesTable.Rows()) - 1) % len(m.queuesTable.Rows())
 	}
 }
 

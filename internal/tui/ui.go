@@ -60,12 +60,14 @@ const (
 	tabAddDownload = iota
 	tabDownloads
 	tabQueues
+	tabHelp // New help page tab
 )
 
 // Model for the table content in Downloads tab
 type Model struct {
 	// Existing fields
 	currentTab            int
+	previousTab           int
 	inputURL              textinput.Model
 	queueSelect           list.Model
 	outputFileName        textinput.Model
@@ -93,16 +95,6 @@ type Model struct {
 
 	downloadmanager *manager.DownloadManager
 }
-
-// QueueItem is the custom type to represent a queue
-// type QueueItem struct {
-// 	ID              string
-// 	SaveDir         string
-// 	MaxConcurrent   string
-// 	MaxBandwidth    string
-// 	ActiveStartTime string
-// 	ActiveEndTime   string
-// }
 
 // Define styles using LipGloss
 var (
@@ -144,7 +136,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for _, row := range m.downloads {
 				manager.Save(row)
 			}
-
 			return m, tea.Quit
 		case "ctrl+left":
 			m.handleTabLeft()
@@ -194,10 +185,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusedFieldForQueues = (m.focusedFieldForQueues + 1) % 5
 				m.updateFocusedFieldForTab3()
 			}
-		case " ":
-			if m.currentTab == tabAddDownload {
-				m.handleSpaceKey()
-			}
+		/*case " ":
+		if m.currentTab == tabAddDownload {
+			m.handleSpaceKey()
+		}*/
 		case "d": // Delete selected download
 			if m.currentTab == tabDownloads {
 				m.deleteDownload()
@@ -213,12 +204,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.retryDownload()
 			}
 		case "n": // Press N to add a new queue
-			if counterForForms == 0 {
+			if counterForForms == 0 && m.currentTab == tabQueues {
 				m.handleSwitchToAddQueueForm()
 			}
 
 		case "e": // Press E to edit a selected queue
-			if counterForForms == 0 {
+			if counterForForms == 0 && m.currentTab == tabQueues {
 				m.handleSwitchToEditQueueForm()
 			}
 		}
@@ -239,7 +230,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) View() string {
 	var renderedTabs []string
-	for i := tabAddDownload; i <= tabQueues; i++ {
+	// Loop from tabAddDownload to tabHelp (including the new Help tab)
+	for i := tabAddDownload; i <= tabHelp; i++ {
 		var style lipgloss.Style
 		if i == m.currentTab {
 			style = tabActiveStyle
@@ -255,6 +247,8 @@ func (m *Model) View() string {
 			tabName = "Downloads"
 		case tabQueues:
 			tabName = "Queues"
+		case tabHelp:
+			tabName = "Help"
 		}
 
 		renderedTabs = append(renderedTabs, style.Render(tabName))
@@ -269,10 +263,43 @@ func (m *Model) View() string {
 	case tabDownloads:
 		content = m.renderDownloadListTab(tabsRow)
 	case tabQueues:
-		content = m.renderQueuesTab(tabsRow) // Ensure this renders when in the Queues tab
+		content = m.renderQueuesTab(tabsRow)
+	case tabHelp:
+		content = m.renderHelpPage(tabsRow)
 	}
 
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).Render(content)
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(content)
+}
+
+func (m *Model) renderHelpPage(tabsRow string) string {
+	helpContent := fmt.Sprintf("%s\n\n", tabsRow)
+
+	helpContent += lipgloss.NewStyle().Underline(true).Render("Add Download Tab:") + "\n"
+	helpContent += "  Enter: Submits the new download form.\n"
+	helpContent += "  Up/Down Arrows: Navigate through the queue list.\n"
+	helpContent += "  Tab: Cycles focus among URL, queue selection, and output file name.\n"
+	helpContent += "  \"-\": Resets focus back to the URL input field.\n\n"
+
+	helpContent += lipgloss.NewStyle().Underline(true).Render("Downloads Tab:") + "\n"
+	helpContent += "  Up/Down Arrows: Navigate through the list of downloads.\n"
+	helpContent += "  D: Deletes the selected download.\n"
+	helpContent += "  P: Pauses or resumes the selected download.\n"
+	helpContent += "  R: Retries the selected download if it has failed.\n\n"
+
+	helpContent += lipgloss.NewStyle().Underline(true).Render("Queues Tab:") + "\n"
+	helpContent += "  Up/Down Arrows: Navigate through the list of queues.\n"
+	helpContent += "  N: Opens the form for adding a new queue.\n"
+	helpContent += "  E: Opens the form for editing the currently selected queue.\n"
+	helpContent += "  Enter: Submits the queue form (new or edit).\n"
+	helpContent += "  Tab: Cycles through the fields in the queue form.\n"
+	helpContent += "  \"-\": Cancels the current queue form and resets the fields.\n"
+	helpContent += "  D: Deletes the selected queue.\n\n"
+
+	helpContent += "Global Keys:\n"
+	helpContent += "  *: Exit help mode when active."
+	helpContent += "ctrl+right/left: Navigate through the tabs"
+
+	return helpContent
 }
 
 func (m *Model) renderQueuesTab(tabsRow string) string {
@@ -333,7 +360,7 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 	if m.errorMessage != "" {
 		content += fmt.Sprintf("\n\n%s", redErrorStyle.Render(m.errorMessage))
 	}
-
+	content += "\nUse ctrl+right/left to navigate through the tabs."
 	return content
 }
 
@@ -364,7 +391,6 @@ func (m *Model) renderAddDownloadTab(tabsRow string) string {
 		}
 
 		content += fmt.Sprintf("%s %s Queue %s\n", cursor, checkbox, item[0])
-
 	}
 
 	var outnameCursor string
@@ -375,11 +401,9 @@ func (m *Model) renderAddDownloadTab(tabsRow string) string {
 	}
 
 	content += fmt.Sprintf(
-		"\n%s\n%s\n\n%s\n\n",
+		"\n%s\n%s\n\n",
 		greenTitleStyle.Render("Output File Name (optional):"),
 		outnameCursor+m.outputFileName.View(),
-		yellowTitleStyle.Render("Press Enter to confirm, up/down to select Queue, ESC to \n"+
-			"cancel/reset, or * to quit the download manager."),
 	)
 
 	// Show the error message in red if it exists
@@ -391,11 +415,11 @@ func (m *Model) renderAddDownloadTab(tabsRow string) string {
 	if m.confirmationMessage != "" {
 		content += fmt.Sprintf("\n\n%s", m.confirmationMessage)
 	}
+	content += "\nUse ctrl+right/left to navigate through the tabs."
 
 	return content
 }
 
-// Render the downloads table
 func (m *Model) renderDownloadListTab(tabsRow string) string {
 	// Get columns from global definition
 	columns := downloadColumns
@@ -440,6 +464,7 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 
 	// Wrap the table content in a box style and add it to the final view
 	content += tableStyle.Render(tableContent)
+	content += "\nUse ctrl+right/left to navigate through the tabs."
 
 	return content
 }
@@ -460,7 +485,8 @@ func (m *Model) renderQueueForm() string {
 		m.activeEndTimeInput.View(),
 	)
 	// Add instructions
-	content += "\nPress Enter to submit, ESC to cancel.\n"
+	content += "\nPress Enter to submit, or \"-\" to cancel.\n"
+	content += "Note: \nTime must be in HH:MM format.\nMax Concurrent must be an integer from 1 to 200.\nMax BandWidth must be an integer.\n"
 
 	return content
 }
@@ -483,8 +509,8 @@ func (m *Model) renderQueueFormForEdit() string {
 	)
 
 	// Add instructions
-	content += "\nPress Enter to submit, ESC to cancel.\n"
-
+	content += "\nPress Enter to submit, or \"-\" to cancel.\n"
+	content += "Note: \nTime must be in HH:MM format.\nMax Concurrent must be an integer from 1 to 200.\nMax BandWidth must be an integer.\n"
 	return content
 }
 
