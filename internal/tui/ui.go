@@ -195,7 +195,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.removeQueue()
 			}
 		case "p": // Pause/Resume selected download
-			fmt.Println(m.currentTab == tabDownloads)
 			if m.currentTab == tabDownloads {
 				m.togglePauseDownload()
 			}
