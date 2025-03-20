@@ -183,16 +183,16 @@ func (m *Model) clearMessages() {
 func (m *Model) togglePauseDownload() {
 	if m.selectedRow >= 0 && m.selectedRow < len(m.downloadsTable.Rows()) {
 		// Check current state of the download
-		state := m.downloadsTable.Rows()[m.selectedRow][2]
+		state := m.downloadsTable.Rows()[m.selectedRow][3]
 
 		if state == "downloading" {
 			// Pause the download
-			m.downloadsTable.Rows()[m.selectedRow][2] = "paused" // Update the state to "Paused"
+			m.downloadsTable.Rows()[m.selectedRow][3] = "paused" // Update the state to "Paused"
 			download := m.dataStore.Downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
 			m.downloadmanager.PauseDownload(download)
 		} else if state == "paused" {
 			// Resume the download
-			m.downloadsTable.Rows()[m.selectedRow][2] = "pending" // Update the state to "pending"
+			m.downloadsTable.Rows()[m.selectedRow][3] = "pending" // Update the state to "pending"
 			download := m.dataStore.Downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
 			m.downloadmanager.ResumeDownload(download)
 		}
@@ -255,11 +255,11 @@ func (m *Model) removeQueue() {
 func (m *Model) retryDownload() {
 	if m.selectedRow >= 0 && m.selectedRow < len(m.downloadsTable.Rows()) {
 		// Check the state of the selected row
-		state := m.downloadsTable.Rows()[m.selectedRow][2]
+		state := m.downloadsTable.Rows()[m.selectedRow][3]
 
 		if state == "failed" {
 			// Retry the download
-			m.downloadsTable.Rows()[m.selectedRow][2] = "retrying" // Update status to "Retrying"
+			m.downloadsTable.Rows()[m.selectedRow][3] = "retrying" // Update status to "Retrying"
 			download := m.dataStore.Downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
 			m.downloadmanager.RetryDownload(download)
 		}
