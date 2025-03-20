@@ -1,58 +1,94 @@
 package manager
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
+	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
-var database *gorm.DB
+var mu sync.Mutex // Mutex for thread-safe operations
 
-func InitializeDB() {
+func LoadData() *DataStore {
+	mu.Lock()
+	defer mu.Unlock()
+
+	file, err := os.Open(getDBPath())
+	if err != nil {
+		return &DataStore{
+			Queues:    make(map[string]*Queue),
+			Downloads: make(map[string]*Download),
+		}
+	}
+	defer file.Close()
+
+	// Decode JSON file into a DataStore
+	var data DataStore
+	if err := json.NewDecoder(file).Decode(&data); err != nil {
+		return &DataStore{
+			Queues:    make(map[string]*Queue),
+			Downloads: make(map[string]*Download),
+		}
+	}
+
+	// Ensure maps are initialized if they are nil
+	if data.Queues == nil {
+		data.Queues = make(map[string]*Queue)
+	}
+	if data.Downloads == nil {
+		data.Downloads = make(map[string]*Download)
+	}
+
+	return &data
+}
+
+func getDBPath() string {
+	// Check if file exists
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		log.Fatal("Failed to get config directory:", err)
+		return "database.json"
 	}
 
 	appConfigDir := filepath.Join(configDir, "gdm")
 	if err := os.MkdirAll(appConfigDir, os.ModePerm); err != nil {
 		log.Fatal("Failed to create config directory:", err)
+		return "database.json"
 	}
 
-	dbPath := filepath.Join(appConfigDir, "database.db")
-	// fmt.Println("Database path:", dbPath)
-	db := sqlite.Open(dbPath)
-
-	gormDB, err := gorm.Open(db, &gorm.Config{})
-	if err != nil {
-		log.Fatal("Failed to open database:", err)
-		return
-	}
-	SetCustomDB(gormDB)
-	err = database.AutoMigrate(&Queue{}, &Download{})
-	if err != nil {
-		log.Fatal("Failed to migrate database:", err)
-	}
-
+	return filepath.Join(appConfigDir, "database.json")
 }
 
-func CloseDB() {
-	sqlDB, err := database.DB()
+// SaveData writes the DataStore back to the JSON file
+func (data *DataStore) Save() error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Open file for writing
+	file, err := os.OpenFile(getDBPath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	sqlDB.Close()
+	defer file.Close()
+
+	// Encode the DataStore as JSON and write to the file
+	return json.NewEncoder(file).Encode(data)
 }
 
-func GetDB() *gorm.DB {
-	return database
+// AddQueue adds a new Queue to the DataStore
+func (data *DataStore) AddQueue(queue *Queue) {
+	queue.ID = len(data.Queues) + 1
+	data.Queues[strconv.Itoa(queue.ID)] = queue
 }
-func SetCustomDB(db *gorm.DB) {
-	database = db
+
+// AddQueue adds a new Download to the DataStore
+func (data *DataStore) AddDownload(download *Download) {
+	download.ID = len(data.Downloads) + 1
+	data.Downloads[strconv.Itoa(download.ID)] = download
 }
 
 func ResetAll(tempDir string) error {
@@ -67,44 +103,4 @@ func ResetAll(tempDir string) error {
 		}
 		return nil
 	})
-}
-
-func Create(model interface{}) error {
-	return GetDB().Create(model).Error
-}
-
-func GetAll(model interface{}) error {
-	return GetDB().Find(model).Error
-}
-func GetAllQueues(queues *[]*Queue) error {
-	return GetDB().Find(&queues).Error
-}
-func GetQueueBy(field string, value interface{}) ([]Queue, error) {
-	var queues []Queue
-	if err := GetDB().Where(field+"= ?", value).Find(&queues).Error; err != nil {
-		return nil, err
-	}
-	return queues, nil
-}
-
-func GetDownloadBy(field string, value interface{}) ([]Download, error) {
-	var downloads []Download
-	if err := GetDB().Preload("Queue").Where(field+"= ?", value).Find(&downloads).Error; err != nil {
-		return nil, err
-	}
-	return downloads, nil
-}
-func GetAllDownloads(downloads *[]*Download) error {
-	return GetDB().Preload("Queue").Find(&downloads).Error
-}
-
-func Save(model interface{}) error {
-	return GetDB().Save(model).Error
-}
-func Delete(model interface{}) error {
-	err := GetDB().Delete(model).Error
-	return err
-}
-func CommitChanges() {
-	GetDB().Commit()
 }

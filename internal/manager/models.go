@@ -6,21 +6,22 @@ import (
 	"time"
 )
 
+// Queue represents a single queue item
 type Queue struct {
-	PartDownloaders           chan *PartDownloader `gorm:"-"`
-	Downloads                 []*Download          `gorm:"-"`
-	tokenBucket               chan struct{}        `gorm:"-"`
-	ticker                    *time.Ticker         `gorm:"-"`
-	IsDeleted                 bool                 `gorm:"-"`
-	ID                        int                  `gorm:"primaryKey" json:"id"`
-	IsActive                  bool                 `gorm:"default:false" json:"is_active"`
+	PartDownloaders           chan *PartDownloader `json:"-"`
+	Downloads                 []*Download          `json:"-"`
+	tokenBucket               chan struct{}        `json:"-"`
+	ticker                    *time.Ticker         `json:"-"`
+	IsDeleted                 bool                 `json:"-"`
+	ID                        int                  `json:"id"`
+	IsActive                  bool                 `json:"is_active"`
 	SaveDir                   string               `json:"save_dir"`
-	MaxConcurrentDownloads    int                  `gorm:"default:5" json:"max_concurrent_downloads"`
-	StartAtOneWorkerAvailable bool                 `gorm:"default:false" json:"start_at_one_worker_available"`
-	MaxBandwidth              int                  `gorm:"default:0" json:"max_bandwidth"`
-	ActiveStartTime           string               `gorm:"default:'00:00'" json:"active_start_time"`
-	ActiveEndTime             string               `gorm:"default:'23:59'" json:"active_end_time"`
-	MaxRetries                int                  `gorm:"default:3" json:"max_retries"`
+	MaxConcurrentDownloads    int                  `json:"max_concurrent_downloads"` // default 10
+	StartAtOneWorkerAvailable bool                 `json:"start_at_one_worker_available"`
+	MaxBandwidth              int                  `json:"max_bandwidth"`     // default 0 for unlimited
+	ActiveStartTime           string               `json:"active_start_time"` // default 00:00
+	ActiveEndTime             string               `json:"active_end_time"`   // default 23:59
+	MaxRetries                int                  `json:"max_retries"`       // default 3
 }
 
 func (q Queue) FilterValue() string {
@@ -28,18 +29,18 @@ func (q Queue) FilterValue() string {
 }
 
 type Download struct {
-	Temps           *DownloadTemps    `gorm:"-"`
-	PartDownloaders []*PartDownloader `gorm:"-"`
-	IsDeleted       bool              `gorm:"-"`
-	ID              int               `gorm:"primaryKey" json:"id"`
-	QueueID         int               `gorm:"not null" json:"queue_id"`
-	IsActive        bool              `gorm:"default:false" json:"is_active"`
+	Temps           *DownloadTemps    `json:"-"`
+	PartDownloaders []*PartDownloader `json:"-"`
+	IsDeleted       bool              `json:"-"`
+	Queue           *Queue            `json:"_"`
+	ID              int               `json:"id"`
+	QueueID         int               `json:"queue_id"`
+	IsActive        bool              `json:"is_active"`
 	Status          string            `json:"status"`
-	TotalSize       int64             `gorm:"default:0" json:"total_size"`
-	IsPartial       bool              `gorm:"default:false" json:"is_partial"`
+	TotalSize       int64             `json:"total_size"`
+	IsPartial       bool              `json:"is_partial"`
 	OutputFile      string            `json:"output_file"`
 	URL             string            `json:"url"`
-	Queue           *Queue            `gorm:"foreignKey:QueueID"`
 }
 
 type DownloadTemps struct {
@@ -65,6 +66,12 @@ type DownloadManager struct {
 	MaxParts   int
 	PartSize   int
 	TempFolder string
+}
+
+// DataStore holds the queues and downloads
+type DataStore struct {
+	Queues    map[string]*Queue    `json:"queues"`    // Map with ID as key and Queue as value
+	Downloads map[string]*Download `json:"downloads"` // Map with ID as key and generic download data
 }
 
 func (d *Download) GetStatus() string {
