@@ -38,9 +38,9 @@ func (m *Model) handleAllErrors() {
 	m.setupsAfterErrorForQueues()
 }
 
-func (m *Model) handleConcurrentAndBWErrors() {
+func (m *Model) handleConcurrentAndBWAndRetriesErrors() {
 	// Logic for concurrent + bandwidth errors
-	m.errorMessage = "Max Concurrent and Max Bandwidth inputs are invalid!"
+	m.errorMessage = "Max Concurrent and Max Bandwidth and Max Retries Per Download inputs are invalid!"
 	m.confirmationMessage = ""
 	m.setupsAfterErrorForQueues()
 }
@@ -107,13 +107,16 @@ func (m *Model) showEditQConfirmation() {
 }
 
 func (m *Model) CheckErrorCodes() int {
-	var concurrentError, bwError, timeError bool
+	var concurrentError, bwError, retriesError, timeError bool
 
 	if !regForConcurrent.MatchString(m.maxConcurrentInput.Value()) {
 		concurrentError = true
 	}
 	if !regForMaxBW.MatchString(m.maxBandwidthInput.Value()) {
 		bwError = true
+	}
+	if !regForMaxBW.MatchString(m.maxRetriesPerDLInput.Value()) {
+		retriesError = true
 	}
 	if !regForHHMMFormat.MatchString(m.activeStartTimeInput.Value()) || !regForHHMMFormat.MatchString(m.activeEndTimeInput.Value()) {
 		timeError = true
@@ -124,8 +127,8 @@ func (m *Model) CheckErrorCodes() int {
 	} else if timeError && concurrentError {
 		m.handleConcurrentAndTimeErrors()
 		return 1
-	} else if bwError && concurrentError {
-		m.handleConcurrentAndBWErrors()
+	} else if bwError && concurrentError && retriesError {
+		m.handleConcurrentAndBWAndRetriesErrors()
 		return 1
 	} else if bwError && timeError {
 		m.handleBWAndTimeErrors()

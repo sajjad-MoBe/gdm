@@ -27,6 +27,7 @@ var downloadColumns = []table.Column{
 	{Title: "Status", Width: 15},
 	{Title: "Progress", Width: 10},
 	{Title: "Speed", Width: 15},
+	{Title: "Retries", Width: 10},
 }
 
 // Sample rows for the Downloads table
@@ -43,6 +44,7 @@ var queueColumns = []table.Column{
 	{Title: "SaveDir", Width: 60},
 	{Title: "Max Concurrent", Width: 15},
 	{Title: "Max Bandwidth", Width: 15},
+	{Title: "Max Retries", Width: 15},
 	{Title: "Active Start Time", Width: 20},
 	{Title: "Active End Time", Width: 20},
 }
@@ -84,6 +86,7 @@ type Model struct {
 	saveDirInput          textinput.Model
 	maxConcurrentInput    textinput.Model
 	maxBandwidthInput     textinput.Model
+	maxRetriesPerDLInput  textinput.Model
 	activeStartTimeInput  textinput.Model
 	activeEndTimeInput    textinput.Model
 	focusedFieldForQueues int
@@ -562,9 +565,9 @@ func (m *Model) renderQueueForm() string {
 	// Display the form header
 	content += italicYellowStyle.Render("New Queue\n")
 
-	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
+	// Display the fields for Save Directory, Max Concurrent, Max Bandwidth and Max Retries Per Download
 	content += fmt.Sprintf(
-		"%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n\n",
+		"%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n\n",
 		"",
 		italicYellowStyle.Render("Save Directory"),
 		m.saveDirInput.View(),
@@ -572,6 +575,8 @@ func (m *Model) renderQueueForm() string {
 		m.maxConcurrentInput.View(),
 		italicYellowStyle.Render("Max Bandwidth"),
 		m.maxBandwidthInput.View(),
+		italicYellowStyle.Render("Max Retries per download"),
+		m.maxRetriesPerDLInput.View(),
 		italicYellowStyle.Render("Active Start Time"),
 		m.activeStartTimeInput.View(),
 		italicYellowStyle.Render("Active End Time"),
@@ -604,9 +609,9 @@ func (m *Model) renderQueueFormForEdit() string {
 	// Display the form header
 	content += italicYellowStyle.Render(fmt.Sprintf("Edit Queue %d\n\n", m.selectedRow))
 
-	// Display the fields for Save Directory, Max Concurrent, and Max Bandwidth
+	// Display the fields for Save Directory, Max Concurrent, Max Bandwidth  Max Retries Per Download
 	content += fmt.Sprintf(
-		"%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n\n",
+		"%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n\n",
 		"",
 		italicYellowStyle.Render("Save Directory"),
 		m.saveDirInput.View(),
@@ -614,6 +619,8 @@ func (m *Model) renderQueueFormForEdit() string {
 		m.maxConcurrentInput.View(),
 		italicYellowStyle.Render("Max Bandwidth"),
 		m.maxBandwidthInput.View(),
+		italicYellowStyle.Render("Max Retries per download"),
+		m.maxRetriesPerDLInput.View(),
 		italicYellowStyle.Render("Active Start Time"),
 		m.activeStartTimeInput.View(),
 		italicYellowStyle.Render("Active End Time"),
@@ -653,6 +660,7 @@ func NewModel() *Model {
 			row.SaveDir,
 			strconv.Itoa(row.MaxConcurrentDownloads),
 			strconv.Itoa(maxBandwidth),
+			strconv.Itoa(row.MaxRetries),
 			row.ActiveStartTime,
 			row.ActiveEndTime,
 		})
@@ -678,6 +686,7 @@ func NewModel() *Model {
 			row.Status,
 			"N/A",
 			"N/A",
+			"0",
 		})
 	}
 	// Initialize the Downloads table using WithColumns option
@@ -694,6 +703,9 @@ func NewModel() *Model {
 
 	maxBandwidthInput := textinput.New()
 	maxBandwidthInput.Placeholder = "Enter Max Bandwidth. "
+
+	maxRetriesPerDLInput := textinput.New()
+	maxRetriesPerDLInput.Placeholder = "Enter Max Retries Per Download. "
 
 	activeStartTimeInput := textinput.New()
 	activeStartTimeInput.Placeholder = "Default is 00:00"
@@ -715,6 +727,7 @@ func NewModel() *Model {
 		saveDirInput:          saveDirInput,
 		maxConcurrentInput:    maxConcurrentInput,
 		maxBandwidthInput:     maxBandwidthInput,
+		maxRetriesPerDLInput:  maxRetriesPerDLInput,
 		activeStartTimeInput:  activeStartTimeInput,
 		activeEndTimeInput:    activeEndTimeInput,
 		focusedFieldForQueues: 0, // Focus on Save Directory initially
@@ -751,13 +764,15 @@ func (m *Model) updateDownloadTable() {
 			row[4] = "-"
 		} else {
 			speed := download.GetSpeed()
-			if speed > 1024 {
+			if speed > 10240 {
 				row[4] = fmt.Sprintf("%.1f", float32(speed)/1024) + "Mb/s"
 			} else {
 				row[4] = strconv.Itoa(download.GetSpeed()) + "Kb/s"
 			}
 
 		}
+		row[5] = strconv.Itoa(download.Temps.Retries)
+
 		downloadRows = append(downloadRows, row)
 	}
 	m.downloadsTable.SetRows(downloadRows)

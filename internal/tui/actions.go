@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -67,6 +68,7 @@ func (m *Model) addNewDownload(download *manager.Download) {
 		download.Status,
 		"N/A",
 		"N/A",
+		"0",
 	}
 
 	// Add the row to the downloadsTable
@@ -85,6 +87,7 @@ func (m *Model) resetFieldsForTab1() {
 func (m *Model) resetFieldsForTab3() {
 	m.saveDirInput.SetValue("")
 	m.maxBandwidthInput.SetValue("")
+	m.maxRetriesPerDLInput.SetValue("")
 	m.maxConcurrentInput.SetValue("")
 	m.activeStartTimeInput.SetValue("")
 	m.activeEndTimeInput.SetValue("")
@@ -142,36 +145,24 @@ func (m *Model) updateFieldFocus() {
 
 // Update focus for the queue form fields
 func (m *Model) updateFocusedFieldForTab3() {
+	m.saveDirInput.Blur()
+	m.maxConcurrentInput.Blur()
+	m.maxBandwidthInput.Blur()
+	m.maxRetriesPerDLInput.Blur()
+	m.activeStartTimeInput.Blur()
+	m.activeEndTimeInput.Blur()
 	switch m.focusedFieldForQueues {
 	case 0:
 		m.saveDirInput.Focus()
-		m.maxConcurrentInput.Blur()
-		m.maxBandwidthInput.Blur()
-		m.activeStartTimeInput.Blur()
-		m.activeEndTimeInput.Blur()
 	case 1:
-		m.saveDirInput.Blur()
 		m.maxConcurrentInput.Focus()
-		m.maxBandwidthInput.Blur()
-		m.activeStartTimeInput.Blur()
-		m.activeEndTimeInput.Blur()
 	case 2:
-		m.saveDirInput.Blur()
-		m.maxConcurrentInput.Blur()
 		m.maxBandwidthInput.Focus()
-		m.activeStartTimeInput.Blur()
-		m.activeEndTimeInput.Blur()
 	case 3:
-		m.saveDirInput.Blur()
-		m.maxConcurrentInput.Blur()
-		m.maxBandwidthInput.Blur()
-		m.activeStartTimeInput.Focus()
-		m.activeEndTimeInput.Blur()
+		m.maxRetriesPerDLInput.Focus()
 	case 4:
-		m.saveDirInput.Blur()
-		m.maxConcurrentInput.Blur()
-		m.maxBandwidthInput.Blur()
-		m.activeStartTimeInput.Blur()
+		m.activeStartTimeInput.Focus()
+	case 5:
 		m.activeEndTimeInput.Focus()
 	}
 }
@@ -292,30 +283,44 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 			m.handleCancel()
 			return
 		}
+		for x := 0; x < 5; x++ {
 
+			fmt.Println(m.maxConcurrentInput.Value(), m.maxBandwidthInput.Value(), m.maxRetriesPerDLInput.Value())
+		}
 		MaxConcurrentDownloads, err := strconv.Atoi(m.maxConcurrentInput.Value())
 		if err != nil {
 			MaxConcurrentDownloads = 10
+		} else if MaxConcurrentDownloads < 0 {
+			MaxConcurrentDownloads = 1
 		}
 		MaxBandwidth, _ := strconv.Atoi(m.maxBandwidthInput.Value())
 		if err != nil {
 			MaxBandwidth = 0
+		} else if MaxBandwidth < 0 {
+			MaxBandwidth = 0
 		}
-		if m.activeStartTimeInput.Value() != "" {
+		MaxRetries, _ := strconv.Atoi(m.maxRetriesPerDLInput.Value())
+		if err != nil {
+			MaxRetries = 5
+		} else if MaxRetries < 0 {
+			MaxRetries = 0
+		}
+		if m.activeStartTimeInput.Value() == "" {
 			m.activeStartTimeInput.SetValue("00:00")
 		}
 
-		if m.activeEndTimeInput.Value() != "" {
+		if m.activeEndTimeInput.Value() == "" {
 			m.activeEndTimeInput.SetValue("23:59")
 		}
 
 		if m.editQueueForm {
 			if m.selectedRow >= 0 && m.selectedRow < len(m.queuesTable.Rows()) {
-				oldQueue := m.queuesTable.Rows()[m.selectedRow]
+				oldQueueRow := m.queuesTable.Rows()[m.selectedRow]
 
-				thisQueue := m.dataStore.Queues[oldQueue[0]]
+				thisQueue := m.dataStore.Queues[oldQueueRow[0]]
 				thisQueue.SaveDir = m.saveDirInput.Value()
 				thisQueue.MaxConcurrentDownloads = MaxConcurrentDownloads
+				thisQueue.MaxRetries = MaxRetries
 
 				thisQueue.ActiveStartTime = m.activeStartTimeInput.Value()
 				thisQueue.ActiveEndTime = m.activeEndTimeInput.Value()
@@ -324,7 +329,7 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 					thisQueue.SetBandwith(MaxBandwidth)
 				}
 
-				m.editQueue(oldQueue, thisQueue)
+				m.editQueue(oldQueueRow, thisQueue)
 				m.newQueueForm = false
 				m.editQueueForm = false
 				m.showEditQConfirmation()
@@ -334,6 +339,7 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 				SaveDir:                m.saveDirInput.Value(),
 				MaxConcurrentDownloads: MaxConcurrentDownloads,
 				MaxBandwidth:           MaxBandwidth,
+				MaxRetries:             MaxRetries,
 				ActiveStartTime:        m.activeStartTimeInput.Value(),
 				ActiveEndTime:          m.activeEndTimeInput.Value(),
 			}
@@ -349,11 +355,13 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 		m.saveDirInput.Reset()
 		m.maxConcurrentInput.Reset()
 		m.maxBandwidthInput.Reset()
+		m.maxRetriesPerDLInput.Reset()
 		m.activeStartTimeInput.Reset()
 		m.activeEndTimeInput.Reset()
 		m.saveDirInput.Focus()
 		m.maxConcurrentInput.Blur()
 		m.maxBandwidthInput.Blur()
+		m.maxRetriesPerDLInput.Blur()
 		m.activeStartTimeInput.Blur()
 		m.activeEndTimeInput.Blur()
 
@@ -372,6 +380,7 @@ func (m *Model) addNewQueue(queue *manager.Queue) {
 		queue.SaveDir,
 		strconv.Itoa(queue.MaxConcurrentDownloads),
 		strconv.Itoa(queue.MaxBandwidth),
+		strconv.Itoa(queue.MaxRetries),
 		queue.ActiveStartTime,
 		queue.ActiveEndTime,
 	}
@@ -384,14 +393,15 @@ func (m *Model) addNewQueue(queue *manager.Queue) {
 }
 
 // Edit an existing queue
-func (m *Model) editQueue(oldQueue table.Row, queue *manager.Queue) {
+func (m *Model) editQueue(oldQueueRow table.Row, queue *manager.Queue) {
 	m.dataStore.Save()
 	// Update the selected queue with new values
 	m.queuesTable.Rows()[m.selectedRow] = table.Row{
-		oldQueue[0],
+		oldQueueRow[0],
 		queue.SaveDir,
 		strconv.Itoa(queue.MaxConcurrentDownloads),
 		strconv.Itoa(queue.MaxBandwidth),
+		strconv.Itoa(queue.MaxRetries),
 		queue.ActiveStartTime,
 		queue.ActiveEndTime,
 	}
@@ -411,6 +421,7 @@ func (m *Model) handleCancel() {
 		m.saveDirInput.Reset()
 		m.maxConcurrentInput.Reset()
 		m.maxBandwidthInput.Reset()
+		m.maxRetriesPerDLInput.Reset()
 		m.activeStartTimeInput.Reset()
 		m.activeEndTimeInput.Reset()
 		counterForForms = 0
@@ -422,6 +433,7 @@ func (m *Model) handleCancel() {
 		m.saveDirInput.Reset()
 		m.maxConcurrentInput.Reset()
 		m.maxBandwidthInput.Reset()
+		m.maxRetriesPerDLInput.Reset()
 		m.activeStartTimeInput.Reset()
 		m.activeEndTimeInput.Reset()
 		counterForForms = 0
@@ -466,6 +478,7 @@ func (m *Model) handleSwitchToEditQueueForm() {
 			m.saveDirInput.SetValue(thisQueue.SaveDir)
 			m.maxConcurrentInput.SetValue(strconv.Itoa(thisQueue.MaxConcurrentDownloads))
 			m.maxBandwidthInput.SetValue(strconv.Itoa(thisQueue.MaxBandwidth))
+			m.maxRetriesPerDLInput.SetValue(strconv.Itoa(thisQueue.MaxRetries))
 
 			// queue[0]
 			m.updateFocusedFieldForTab3()
@@ -499,8 +512,10 @@ func (m *Model) updateBasedOnInputForTab3(msg tea.Msg, _ tea.Cmd) {
 		case 2:
 			m.maxBandwidthInput, _ = m.maxBandwidthInput.Update(msg)
 		case 3:
-			m.activeStartTimeInput, _ = m.activeStartTimeInput.Update(msg)
+			m.maxRetriesPerDLInput, _ = m.maxRetriesPerDLInput.Update(msg)
 		case 4:
+			m.activeStartTimeInput, _ = m.activeStartTimeInput.Update(msg)
+		case 5:
 			m.activeEndTimeInput, _ = m.activeEndTimeInput.Update(msg)
 		}
 	}

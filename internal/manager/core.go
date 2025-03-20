@@ -285,9 +285,6 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 	if err != nil {
 		return err
 	}
-	// fmt.Println(partDownloader.TempFile, partDownloader.Start)
-	// fmt.Println(partDownloader.Downloaded)
-	// os.Exit(0)
 
 	if partDownloader.Start < partDownloader.End {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", partDownloader.Start, partDownloader.End))
@@ -319,7 +316,7 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 	} else {
 		buf = make([]byte, 1024*1024) // 2^20 or 1 Mb
 	}
-	startTime := time.Now()
+
 	for {
 		if download.Queue.MaxBandwidth != bandwidth {
 			time.Sleep(1 * time.Second)
@@ -330,6 +327,7 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 				buf = make([]byte, 1024*1024) // 2^20 or 1 Mb
 			}
 		}
+		startTime := time.Now()
 		if bandwidth > 0 {
 			// fmt.Println(download.Queue.MaxBandwidth)
 			<-download.Queue.tokenBucket
@@ -343,9 +341,10 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 			download.Temps.TotalDownloaded += int64(n)
 			download.Temps.Mutex.Unlock()
 			file.Write(buf[:n])
-			elapsed := time.Since(startTime).Seconds()
-			partDownloader.Speed = int64(float64(partDownloader.Downloaded) / elapsed)
 		}
+		elapsed := time.Since(startTime).Seconds()
+		partDownloader.Speed = int64(float64(n) / elapsed)
+
 		if err == io.EOF {
 			break
 		}
