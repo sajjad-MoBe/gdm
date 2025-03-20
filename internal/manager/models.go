@@ -12,7 +12,7 @@ type Queue struct {
 	Downloads                 []*Download          `json:"-"`
 	tokenBucket               chan struct{}        `json:"-"`
 	ticker                    *time.Ticker         `json:"-"`
-	IsDeleted                 bool                 `json:"-"`
+	IsRemoved                 bool                 `json:"-"`
 	ID                        int                  `json:"id"`
 	IsActive                  bool                 `json:"is_active"`
 	SaveDir                   string               `json:"save_dir"`
@@ -31,7 +31,7 @@ func (q Queue) FilterValue() string {
 type Download struct {
 	Temps           *DownloadTemps    `json:"-"`
 	PartDownloaders []*PartDownloader `json:"-"`
-	IsDeleted       bool              `json:"-"`
+	IsRemoved       bool              `json:"-"`
 	Queue           *Queue            `json:"_"`
 	ID              int               `json:"id"`
 	QueueID         int               `json:"queue_id"`

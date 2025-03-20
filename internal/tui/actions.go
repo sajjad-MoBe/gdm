@@ -38,8 +38,9 @@ func (m *Model) handleNewDownloadSubmit() {
 		outputFile := m.outputFileName.Value()
 		// should be validated
 		queue := m.dataStore.Queues[m.queuesTable.Rows()[m.selectedQueueRowIndex][0]]
-
+		m.maxDownloadID++
 		newDwnload := manager.Download{
+			ID:         m.maxDownloadID,
 			URL:        downloadURL,
 			QueueID:    queue.ID,
 			Queue:      queue,
@@ -64,6 +65,7 @@ func (m *Model) addNewDownload(download *manager.Download) {
 
 	newRow := table.Row{
 		strconv.Itoa(download.ID),
+		strconv.Itoa(download.QueueID),
 		download.URL,
 		download.Status,
 		"N/A",
@@ -73,8 +75,8 @@ func (m *Model) addNewDownload(download *manager.Download) {
 
 	// Add the row to the downloadsTable
 	m.downloadsTable = table.New(
-		table.WithColumns(downloadColumns),                      // Keep the existing columns
-		table.WithRows(append(m.downloadsTable.Rows(), newRow)), // Add the new row
+		table.WithColumns(downloadColumns),                                      // Keep the existing columns
+		table.WithRows(append([]table.Row{newRow}, m.downloadsTable.Rows()...)), // Add the new row
 	)
 }
 
@@ -197,14 +199,14 @@ func (m *Model) togglePauseDownload() {
 	}
 }
 
-// Modify the deleteDownload method to delete the selected row
-func (m *Model) deleteDownload() {
+// Modify the removeDownload method to remove the selected row
+func (m *Model) removeDownload() {
 	if m.selectedRow >= 0 && m.selectedRow < len(m.downloadsTable.Rows()) {
 		// Remove the row from the table by slicing the rows
 
 		index := m.downloadsTable.Rows()[m.selectedRow][0]
 		download := m.dataStore.Downloads[index]
-		m.downloadmanager.DeleteDownload(download)
+		m.downloadmanager.RemoveDownload(download)
 		m.dataStore.RemoveDownload(download)
 
 		newRows := append(m.downloadsTable.Rows()[:m.selectedRow], m.downloadsTable.Rows()[m.selectedRow+1:]...)
@@ -215,20 +217,20 @@ func (m *Model) deleteDownload() {
 			table.WithRows(newRows),            // Set the new rows
 		)
 
-		// Adjust the selected row to prevent out of bounds error if the last row is deleted
+		// Adjust the selected row to prevent out of bounds error if the last row is removed
 		if m.selectedRow >= len(newRows) {
 			m.selectedRow = len(newRows) - 1
 		}
 	}
 }
 
-func (m *Model) deleteQueue() {
+func (m *Model) removeQueue() {
 	if m.selectedRow >= 0 && m.selectedRow < len(m.queuesTable.Rows()) {
 		// Remove the row from the table by slicing the rows
 
 		index := m.queuesTable.Rows()[m.selectedRow][0]
 		queue := m.dataStore.Queues[index]
-		m.downloadmanager.DeleteQueue(queue)
+		m.downloadmanager.RemoveQueue(queue)
 		for _, download := range queue.Downloads {
 			m.dataStore.RemoveDownload(download)
 		}
@@ -241,7 +243,7 @@ func (m *Model) deleteQueue() {
 			table.WithRows(newRows),         // Set the new rows
 		)
 
-		// Adjust the selected row to prevent out of bounds error if the last row is deleted
+		// Adjust the selected row to prevent out of bounds error if the last row is removed
 		if m.selectedRow >= len(newRows) {
 			m.selectedRow = len(newRows) - 1
 		}
@@ -335,7 +337,9 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 				m.showEditQConfirmation()
 			}
 		} else {
+			m.maxQueueID++
 			newQueue := manager.Queue{
+				ID:                     m.maxQueueID,
 				SaveDir:                m.saveDirInput.Value(),
 				MaxConcurrentDownloads: MaxConcurrentDownloads,
 				MaxBandwidth:           MaxBandwidth,
@@ -387,8 +391,8 @@ func (m *Model) addNewQueue(queue *manager.Queue) {
 
 	// Add the row to the queuesTable
 	m.queuesTable = table.New(
-		table.WithColumns(queueColumns),                      // Keep the existing columns
-		table.WithRows(append(m.queuesTable.Rows(), newRow)), // Add the new row
+		table.WithColumns(queueColumns),                                      // Keep the existing columns
+		table.WithRows(append([]table.Row{newRow}, m.queuesTable.Rows()...)), // Add the new row
 	)
 }
 

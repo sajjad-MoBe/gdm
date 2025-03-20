@@ -26,7 +26,7 @@ func NewManager(maxParts, partSize int) *DownloadManager {
 
 func (dm *DownloadManager) AddQueue(queue *Queue) {
 	queue.IsActive = false
-	queue.IsDeleted = false
+	queue.IsRemoved = false
 	queue.PartDownloaders = make(chan *PartDownloader, queue.MaxConcurrentDownloads)
 	dm.Queues = append(dm.Queues, queue)
 	if queue.MaxBandwidth > 0 {
@@ -34,7 +34,7 @@ func (dm *DownloadManager) AddQueue(queue *Queue) {
 	}
 	go func() {
 		for {
-			if queue.IsDeleted {
+			if queue.IsRemoved {
 				return
 			}
 			if IsWithinActiveHours(queue.ActiveStartTime, queue.ActiveEndTime) {
@@ -86,7 +86,7 @@ func (dm *DownloadManager) AddDownload(download *Download) {
 	}
 	download.Temps = &DownloadTemps{0, 0, time.Now(), &sync.Mutex{}}
 	download.IsActive = false
-	download.IsDeleted = false
+	download.IsRemoved = false
 
 	if download.Status != "failed" && download.Status != "paused" {
 		download.Status = "initializing"
@@ -187,10 +187,10 @@ func (dm *DownloadManager) RetryDownload(download *Download) {
 	go dm.initializeDownload(download)
 }
 
-func (dm *DownloadManager) DeleteDownload(download *Download) {
+func (dm *DownloadManager) RemoveDownload(download *Download) {
 	download.Status = "paused"
-	download.IsDeleted = true
-	if !download.Queue.IsDeleted {
+	download.IsRemoved = true
+	if !download.Queue.IsRemoved {
 
 		var updatedDownloads []*Download
 		for _, d := range download.Queue.Downloads {
@@ -208,13 +208,13 @@ func (dm *DownloadManager) DeleteDownload(download *Download) {
 	}()
 
 }
-func (dm *DownloadManager) DeleteQueue(queue *Queue) {
+func (dm *DownloadManager) RemoveQueue(queue *Queue) {
 
 	queue.IsActive = false
-	queue.IsDeleted = true
+	queue.IsRemoved = true
 
 	for _, d := range queue.Downloads {
-		dm.DeleteDownload(d)
+		dm.RemoveDownload(d)
 	}
 }
 
@@ -348,7 +348,7 @@ func (dm *DownloadManager) partDownload(download *Download, partDownloader *Part
 		if err == io.EOF {
 			break
 		}
-		if !download.Queue.IsActive || download.IsDeleted || download.Status == "paused" {
+		if !download.Queue.IsActive || download.IsRemoved || download.Status == "paused" {
 			partDownloader.IsPaused = true
 			break
 		}

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"time"
 
@@ -23,6 +24,7 @@ var regForHHMMFormat = regexp.MustCompile(`^(?:[01]?[0-9]|2[0-3]):([0-5]?[0-9])$
 // Define your table columns for the Downloads tab
 var downloadColumns = []table.Column{
 	{Title: "Download ID", Width: 15},
+	{Title: "Queue ID", Width: 15},
 	{Title: "URL", Width: 60},
 	{Title: "Status", Width: 15},
 	{Title: "Progress", Width: 10},
@@ -91,8 +93,9 @@ type Model struct {
 	activeEndTimeInput    textinput.Model
 	focusedFieldForQueues int
 	dataStore             *manager.DataStore
-
-	downloadmanager *manager.DownloadManager
+	maxQueueID            int
+	maxDownloadID         int
+	downloadmanager       *manager.DownloadManager
 }
 
 // Define styles using LipGloss
@@ -131,9 +134,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "*":
-			// for _, row := range m.downloads {
-			// 	manager.Save(row)
-			// }
 			m.dataStore.Save()
 			return m, tea.Quit
 		case "shift+left":
@@ -188,11 +188,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.currentTab == tabAddDownload {
 			m.handleSpaceKey()
 		}*/
-		case "d": // Delete selected download
+		case "d": // Remove selected download
 			if m.currentTab == tabDownloads {
-				m.deleteDownload()
+				m.removeDownload()
 			} else if m.currentTab == tabQueues {
-				m.deleteQueue()
+				m.removeQueue()
 			}
 		case "p": // Pause/Resume selected download
 			if m.currentTab == tabDownloads {
@@ -299,7 +299,7 @@ func (m *Model) renderHelpPage(tabsRow string) string {
 	// Downloads Tab section.
 	helpContent += headerStyle.Render("Downloads Tab:") + "\n"
 	helpContent += textStyle.Render("  Up/Down Arrows: Navigate through the list of downloads.") + "\n"
-	helpContent += textStyle.Render("  D: Deletes the selected download.") + "\n"
+	helpContent += textStyle.Render("  D: Removes the selected download.") + "\n"
 	helpContent += textStyle.Render("  P: Pauses or resumes the selected download.") + "\n"
 	helpContent += textStyle.Render("  R: Retries the selected download if it has failed.") + "\n"
 
@@ -311,7 +311,7 @@ func (m *Model) renderHelpPage(tabsRow string) string {
 	helpContent += textStyle.Render("  Enter: Submits the queue form (new or edit).") + "\n"
 	helpContent += textStyle.Render("  Tab: Cycles through the fields in the queue form.") + "\n"
 	helpContent += textStyle.Render("  \"-\": Cancels the current queue form and resets the fields.") + "\n"
-	helpContent += textStyle.Render("  D: Deletes the selected queue.") + "\n"
+	helpContent += textStyle.Render("  D: Removes the selected queue.") + "\n"
 
 	// Global keys section.
 	helpContent += headerStyle.Render("Global Keys:") + "\n"
@@ -651,10 +651,21 @@ func NewModel() *Model {
 	outputFileName.Placeholder = "Optional output file name"
 	outputFileName.Blur()
 
+	keys := make([]string, 0, len(dataStore.Queues))
+	for key := range dataStore.Queues {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	maxQueueID := 0
 	queueRows := []table.Row{}
-	for _, row := range dataStore.Queues {
+	for _, key := range keys {
+		row := dataStore.Queues[key]
 		maxBandwidth := row.MaxBandwidth
 		downloadmanager.AddQueue(row)
+		if row.ID > maxQueueID {
+			maxQueueID = row.ID
+		}
 		queueRows = append(queueRows, table.Row{
 			strconv.Itoa(row.ID),
 			row.SaveDir,
@@ -670,9 +681,19 @@ func NewModel() *Model {
 		table.WithRows(queueRows),       // Specify rows
 	)
 
+	keys = make([]string, 0, len(dataStore.Downloads))
+	for key := range dataStore.Downloads {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	maxDownloadID := 0
+
 	downloadRows := []table.Row{}
-	for _, row := range dataStore.Downloads {
-		// row.QueueID = queuesMap[strconv.Itoa(row.QueueID)].ID
+	for _, key := range keys {
+		row := dataStore.Downloads[key]
+		if row.ID > maxDownloadID {
+			maxDownloadID = row.ID
+		}
 		if row.QueueID == 0 {
 			dataStore.RemoveDownload(row)
 			continue
@@ -682,6 +703,7 @@ func NewModel() *Model {
 		downloadmanager.AddDownload(row)
 		downloadRows = append(downloadRows, table.Row{
 			strconv.Itoa(row.ID),
+			strconv.Itoa(row.QueueID),
 			row.URL,
 			row.Status,
 			"N/A",
@@ -689,6 +711,7 @@ func NewModel() *Model {
 			"0",
 		})
 	}
+	fmt.Println(maxQueueID, maxDownloadID)
 	// Initialize the Downloads table using WithColumns option
 	downloadsTable := table.New(
 		table.WithColumns(downloadColumns), // Specify columns with WithColumns
@@ -732,6 +755,8 @@ func NewModel() *Model {
 		activeEndTimeInput:    activeEndTimeInput,
 		focusedFieldForQueues: 0, // Focus on Save Directory initially
 		dataStore:             dataStore,
+		maxQueueID:            maxQueueID,
+		maxDownloadID:         maxDownloadID,
 		downloadmanager:       downloadmanager,
 	}
 }
@@ -741,37 +766,37 @@ func (m *Model) updateDownloadTable() {
 
 	for _, row := range m.downloadsTable.Rows() {
 		download := m.dataStore.Downloads[row[0]]
-		if download == nil || download.IsDeleted || download.Queue == nil {
+		if download == nil || download.IsRemoved || download.Queue == nil {
 			continue
 		}
-		row[2] = download.GetStatus()
+		row[3] = download.GetStatus()
 
 		if download.IsPartial {
 			switch download.Status {
 			case "finished":
-				row[3] = "100%"
+				row[4] = "100%"
 			case "initializing":
-				row[3] = "N/A"
+				row[4] = "N/A"
 			default:
-				row[3] = strconv.Itoa(download.GetProgress()) + "%"
+				row[4] = strconv.Itoa(download.GetProgress()) + "%"
 
 			}
 		} else {
-			row[3] = "?"
+			row[4] = "?"
 		}
 
 		if download.GetStatus() != "downloading" {
-			row[4] = "-"
+			row[5] = "-"
 		} else {
 			speed := download.GetSpeed()
 			if speed > 10240 {
-				row[4] = fmt.Sprintf("%.1f", float32(speed)/1024) + "Mb/s"
+				row[5] = fmt.Sprintf("%.1f", float32(speed)/1024) + "Mb/s"
 			} else {
-				row[4] = strconv.Itoa(download.GetSpeed()) + "Kb/s"
+				row[5] = strconv.Itoa(download.GetSpeed()) + "Kb/s"
 			}
 
 		}
-		row[5] = strconv.Itoa(download.Temps.Retries)
+		row[6] = strconv.Itoa(download.Temps.Retries)
 
 		downloadRows = append(downloadRows, row)
 	}

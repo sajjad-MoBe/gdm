@@ -81,19 +81,20 @@ func (data *DataStore) Save() error {
 
 // AddQueue adds a new Queue to the DataStore
 func (data *DataStore) AddQueue(queue *Queue) {
-	queue.ID = len(data.Queues) + 1
 	data.Queues[strconv.Itoa(queue.ID)] = queue
+	data.Save()
 }
 
 // RemoveQueue removes a Queue from the DataStore
 func (data *DataStore) RemoveQueue(queue *Queue) {
 	delete(data.Queues, strconv.Itoa(queue.ID))
+	data.Save()
 }
 
 // AddDownload adds a new Download to the DataStore
 func (data *DataStore) AddDownload(download *Download) {
-	download.ID = len(data.Downloads) + 1
 	data.Downloads[strconv.Itoa(download.ID)] = download
+	data.Save()
 }
 
 // RemoveDownload removes a Download from the DataStore
