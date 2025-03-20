@@ -23,8 +23,8 @@ var regForHHMMFormat = regexp.MustCompile(`^(?:[01]?[0-9]|2[0-3]):([0-5]?[0-9])$
 
 // Define your table columns for the Downloads tab
 var downloadColumns = []table.Column{
-	{Title: "Download ID", Width: 15},
-	{Title: "Queue ID", Width: 15},
+	{Title: "Download ID", Width: 10},
+	{Title: "Queue ID", Width: 10},
 	{Title: "URL", Width: 60},
 	{Title: "Status", Width: 15},
 	{Title: "Progress", Width: 10},
@@ -637,6 +637,17 @@ func (m *Model) renderQueueFormForEdit() string {
 	return content
 }
 
+type ByDescending []string
+
+func (s ByDescending) Len() int {
+	return len(s)
+}
+func (s ByDescending) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s ByDescending) Less(i, j int) bool {
+	return s[i] > s[j]
+}
 func NewModel() *Model {
 	dataStore := manager.LoadData()
 	MaxParts := 10 // Maximum number of parts for one download
@@ -655,7 +666,7 @@ func NewModel() *Model {
 	for key := range dataStore.Queues {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	sort.Sort(ByDescending(keys))
 
 	maxQueueID := 0
 	queueRows := []table.Row{}
@@ -685,7 +696,7 @@ func NewModel() *Model {
 	for key := range dataStore.Downloads {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	sort.Sort(ByDescending(keys))
 	maxDownloadID := 0
 
 	downloadRows := []table.Row{}
