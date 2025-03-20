@@ -90,8 +90,7 @@ type Model struct {
 	activeStartTimeInput  textinput.Model
 	activeEndTimeInput    textinput.Model
 	focusedFieldForQueues int
-	queues                map[string]*manager.Queue
-	downloads             map[string]*manager.Download
+	dataStore             *manager.DataStore
 
 	downloadmanager *manager.DownloadManager
 }
@@ -635,7 +634,7 @@ func (m *Model) renderQueueFormForEdit() string {
 }
 
 func NewModel() *Model {
-	manager.InitializeDB()
+	dataStore := manager.LoadData()
 	MaxParts := 10 // Maximum number of parts for one download
 	PartSize := 10 // create new part downloader per each PartSize mb
 	downloadmanager := manager.NewManager(MaxParts, PartSize)

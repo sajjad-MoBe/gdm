@@ -85,10 +85,20 @@ func (data *DataStore) AddQueue(queue *Queue) {
 	data.Queues[strconv.Itoa(queue.ID)] = queue
 }
 
-// AddQueue adds a new Download to the DataStore
+// RemoveQueue removes a Queue from the DataStore
+func (data *DataStore) RemoveQueue(queue *Queue) {
+	delete(data.Queues, strconv.Itoa(queue.ID))
+}
+
+// AddDownload adds a new Download to the DataStore
 func (data *DataStore) AddDownload(download *Download) {
 	download.ID = len(data.Downloads) + 1
 	data.Downloads[strconv.Itoa(download.ID)] = download
+}
+
+// RemoveDownload removes a Download from the DataStore
+func (data *DataStore) RemoveDownload(download *Download) {
+	delete(data.Downloads, strconv.Itoa(download.ID))
 }
 
 func ResetAll(tempDir string) error {
