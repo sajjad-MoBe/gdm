@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -37,7 +36,7 @@ func (m *Model) handleNewDownloadSubmit() {
 
 		outputFile := m.outputFileName.Value()
 		// should be validated
-		queue := m.queues[m.queuesTable.Rows()[m.selectedQueueRowIndex][0]]
+		queue := m.dataStore.Queues[m.queuesTable.Rows()[m.selectedQueueRowIndex][0]]
 
 		newDwnload := manager.Download{
 			URL:        downloadURL,
@@ -59,13 +58,8 @@ func (m *Model) handleNewDownloadSubmit() {
 
 // Add a new download
 func (m *Model) addNewDownload(download *manager.Download) {
-	if err := manager.Create(&download); err != nil {
-		//	show error
-		fmt.Printf("failed to create download: %v", err)
-		return
-	}
+	m.dataStore.AddDownload(download)
 	m.downloadmanager.AddDownload(download)
-	m.downloads[strconv.Itoa(download.ID)] = download
 
 	newRow := table.Row{
 		strconv.Itoa(download.ID),
@@ -84,7 +78,6 @@ func (m *Model) addNewDownload(download *manager.Download) {
 
 func (m *Model) resetFieldsForTab1() {
 	m.inputURL.SetValue("")
-	m.queueSelect.ResetSelected()
 	m.outputFileName.SetValue("")
 	m.selectedQueueRowIndex = 0
 }
@@ -131,12 +124,6 @@ func (m *Model) updateFocusedFieldForTab1() {
 		}
 		m.focusedField = (m.focusedField + 1) % 3
 		m.updateFieldFocus()
-	}
-}
-
-func (m *Model) handleSpaceKey() {
-	if m.currentTab == tabAddDownload && m.focusedField == 1 {
-		m.selectedQueueRowIndex++
 	}
 }
 
@@ -208,12 +195,12 @@ func (m *Model) togglePauseDownload() {
 		if state == "downloading" {
 			// Pause the download
 			m.downloadsTable.Rows()[m.selectedRow][2] = "paused" // Update the state to "Paused"
-			download := m.downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
+			download := m.dataStore.Downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
 			m.downloadmanager.PauseDownload(download)
 		} else if state == "paused" {
 			// Resume the download
 			m.downloadsTable.Rows()[m.selectedRow][2] = "pending" // Update the state to "pending"
-			download := m.downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
+			download := m.dataStore.Downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
 			m.downloadmanager.ResumeDownload(download)
 		}
 	}
@@ -225,12 +212,9 @@ func (m *Model) deleteDownload() {
 		// Remove the row from the table by slicing the rows
 
 		index := m.downloadsTable.Rows()[m.selectedRow][0]
-		download := m.downloads[index]
+		download := m.dataStore.Downloads[index]
 		m.downloadmanager.DeleteDownload(download)
-		manager.Delete(download)
-		// manager.CommitChanges()
-		// m.downloads[index] = nil
-		delete(m.downloads, index)
+		m.dataStore.RemoveDownload(download)
 
 		newRows := append(m.downloadsTable.Rows()[:m.selectedRow], m.downloadsTable.Rows()[m.selectedRow+1:]...)
 
@@ -252,16 +236,12 @@ func (m *Model) deleteQueue() {
 		// Remove the row from the table by slicing the rows
 
 		index := m.queuesTable.Rows()[m.selectedRow][0]
-		queue := m.queues[index]
+		queue := m.dataStore.Queues[index]
 		m.downloadmanager.DeleteQueue(queue)
 		for _, download := range queue.Downloads {
-			manager.Delete(download)
-			delete(m.downloads, strconv.Itoa(download.ID))
+			m.dataStore.RemoveDownload(download)
 		}
-		manager.Delete(queue)
-		// manager.CommitChanges() // ensure all instances are deleted
-		// m.queues[index] = nil
-		delete(m.queues, index)
+		m.dataStore.RemoveQueue(queue)
 
 		// Update the queuesTable with the new rows
 		newRows := append(m.queuesTable.Rows()[:m.selectedRow], m.queuesTable.Rows()[m.selectedRow+1:]...)
@@ -287,7 +267,7 @@ func (m *Model) retryDownload() {
 		if state == "failed" {
 			// Retry the download
 			m.downloadsTable.Rows()[m.selectedRow][2] = "retrying" // Update status to "Retrying"
-			download := m.downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
+			download := m.dataStore.Downloads[m.downloadsTable.Rows()[m.selectedRow][0]]
 			m.downloadmanager.RetryDownload(download)
 		}
 	}
@@ -296,20 +276,10 @@ func (m *Model) retryDownload() {
 func (m *Model) updateFocusedField(msg tea.Msg) {
 	if m.focusedField == 0 {
 		m.inputURL.Update(msg)
-	} else if m.focusedField == 1 {
-		m.queueSelect.Update(msg)
+		// } else if m.focusedField == 1 {
+		// 	m.queueSelect.Update(msg)
 	} else if m.focusedField == 2 {
 		m.outputFileName.Update(msg)
-	}
-}
-
-func (m *Model) updateFocusedFieldForQueue(msg tea.Msg) {
-	if m.focusedFieldForQueues == 0 {
-		m.saveDirInput.Update(msg)
-	} else if m.focusedFieldForQueues == 1 {
-		m.maxConcurrentInput.Update(msg)
-	} else if m.focusedFieldForQueues == 2 {
-		m.maxBandwidthInput.Update(msg)
 	}
 }
 
@@ -323,28 +293,32 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 			return
 		}
 
-		MaxConcurrentDownloads, _ := strconv.Atoi(m.maxConcurrentInput.Value())
+		MaxConcurrentDownloads, err := strconv.Atoi(m.maxConcurrentInput.Value())
+		if err != nil {
+			MaxConcurrentDownloads = 10
+		}
 		MaxBandwidth, _ := strconv.Atoi(m.maxBandwidthInput.Value())
+		if err != nil {
+			MaxBandwidth = 0
+		}
+		if m.activeStartTimeInput.Value() != "" {
+			m.activeStartTimeInput.SetValue("00:00")
+		}
+
+		if m.activeEndTimeInput.Value() != "" {
+			m.activeEndTimeInput.SetValue("23:59")
+		}
 
 		if m.editQueueForm {
 			if m.selectedRow >= 0 && m.selectedRow < len(m.queuesTable.Rows()) {
 				oldQueue := m.queuesTable.Rows()[m.selectedRow]
 
-				thisQueue := m.queues[oldQueue[0]]
+				thisQueue := m.dataStore.Queues[oldQueue[0]]
 				thisQueue.SaveDir = m.saveDirInput.Value()
 				thisQueue.MaxConcurrentDownloads = MaxConcurrentDownloads
 
-				if m.activeStartTimeInput.Value() != "" {
-					thisQueue.ActiveStartTime = m.activeStartTimeInput.Value()
-				} else {
-					thisQueue.ActiveStartTime = "00:00"
-				}
-
-				if m.activeEndTimeInput.Value() != "" {
-					thisQueue.ActiveEndTime = m.activeEndTimeInput.Value()
-				} else {
-					thisQueue.ActiveEndTime = "23:59"
-				}
+				thisQueue.ActiveStartTime = m.activeStartTimeInput.Value()
+				thisQueue.ActiveEndTime = m.activeEndTimeInput.Value()
 
 				if thisQueue.MaxBandwidth != MaxBandwidth {
 					thisQueue.SetBandwith(MaxBandwidth)
@@ -390,13 +364,8 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 
 // Add a new queue
 func (m *Model) addNewQueue(queue *manager.Queue) {
-	if err := manager.Create(&queue); err != nil {
-		//	show error
-		fmt.Printf("failed to create queue: %v", err)
-		return
-	}
+	m.dataStore.AddQueue(queue)
 	m.downloadmanager.AddQueue(queue)
-	m.queues[strconv.Itoa(queue.ID)] = queue
 
 	newRow := table.Row{
 		strconv.Itoa(queue.ID),
@@ -416,7 +385,7 @@ func (m *Model) addNewQueue(queue *manager.Queue) {
 
 // Edit an existing queue
 func (m *Model) editQueue(oldQueue table.Row, queue *manager.Queue) {
-	manager.Save(queue)
+	m.dataStore.Save()
 	// Update the selected queue with new values
 	m.queuesTable.Rows()[m.selectedRow] = table.Row{
 		oldQueue[0],
@@ -493,7 +462,7 @@ func (m *Model) handleSwitchToEditQueueForm() {
 			m.editQueueForm = true
 			m.newQueueForm = false
 			queueID := m.queuesTable.Rows()[m.selectedRow][0]
-			thisQueue := m.queues[queueID]
+			thisQueue := m.dataStore.Queues[queueID]
 			m.saveDirInput.SetValue(thisQueue.SaveDir)
 			m.maxConcurrentInput.SetValue(strconv.Itoa(thisQueue.MaxConcurrentDownloads))
 			m.maxBandwidthInput.SetValue(strconv.Itoa(thisQueue.MaxBandwidth))
@@ -509,8 +478,8 @@ func (m *Model) updateBasedOnInputForTab1(msg tea.Msg, _ tea.Cmd) {
 	if m.currentTab == tabAddDownload {
 		if m.focusedField == 0 {
 			m.inputURL, _ = m.inputURL.Update(msg)
-		} else if m.focusedField == 1 {
-			m.queueSelect, _ = m.queueSelect.Update(msg)
+			// } else if m.focusedField == 1 {
+			// m.selectedQueueRowIndex = 0
 		} else if m.focusedField == 2 {
 			m.outputFileName, _ = m.outputFileName.Update(msg)
 		}

@@ -8,7 +8,6 @@ import (
 
 	"github.com/sajjad-mobe/gdm/internal/manager"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -67,9 +66,7 @@ const (
 type Model struct {
 	// Existing fields
 	currentTab            int
-	previousTab           int
 	inputURL              textinput.Model
-	queueSelect           list.Model
 	outputFileName        textinput.Model
 	selectedQueueRowIndex int       // Tracks selected pages
 	focusedField          int       // 0 for inputURL, 1 for queueSelect, 2 for outputFileName
@@ -98,7 +95,6 @@ type Model struct {
 // Define styles using LipGloss
 var (
 	greenTitleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true).Italic(true)
-	yellowTitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true).Italic(true)
 	tabActiveStyle   = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("4")).Padding(0, 2).Bold(true)
 	tabInactiveStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(0, 2)
 	cursorStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("4")).Bold(true)
@@ -132,13 +128,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "*":
-			for _, row := range m.downloads {
-				manager.Save(row)
-			}
+			// for _, row := range m.downloads {
+			// 	manager.Save(row)
+			// }
+			m.dataStore.Save()
 			return m, tea.Quit
-		case "ctrl+left":
+		case "shift+left":
 			m.handleTabLeft()
-		case "ctrl+right":
+		case "shift+right":
 			m.handleTabRight()
 		case "enter":
 			if m.currentTab == tabAddDownload {
@@ -316,7 +313,7 @@ func (m *Model) renderHelpPage(tabsRow string) string {
 	// Global keys section.
 	helpContent += headerStyle.Render("Global Keys:") + "\n"
 	helpContent += globalTextStyle.Render("  *: Exit help mode when active.") + "\n"
-	helpContent += globalTextStyle.Render("  ctrl+right/left: Navigate through the tabs") + "\n"
+	helpContent += globalTextStyle.Render("  shift+right/left: Navigate through the tabs") + "\n"
 
 	return helpContent
 }
@@ -399,7 +396,7 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 	navigationStyle := lipgloss.NewStyle().
 		Italic(true).
 		Foreground(lipgloss.Color("#F39C12"))
-	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("	  Use ctrl+right/left to navigate through the tabs."))
+	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("	  Use shift+right/left to navigate through the tabs."))
 	return content
 }
 
@@ -467,7 +464,7 @@ func (m *Model) renderAddDownloadTab(tabsRow string) string {
 		Italic(true).
 		Foreground(lipgloss.Color("#F39C12"))
 
-	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("    Use ctrl+right/left to navigate through the tabs."))
+	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("    Use shift+right/left to navigate through the tabs."))
 
 	return content
 }
@@ -547,7 +544,7 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 		Italic(true).
 		Foreground(lipgloss.Color("#F39C12"))
 
-	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("    Use ctrl+right/left to navigate through the tabs."))
+	content += fmt.Sprintf("\n\n%s", navigationStyle.Render("    Use shift+right/left to navigate through the tabs."))
 
 	return content
 }
@@ -647,20 +644,10 @@ func NewModel() *Model {
 	outputFileName.Placeholder = "Optional output file name"
 	outputFileName.Blur()
 
-	var queues []*manager.Queue
-	if err := manager.GetAllQueues(&queues); err != nil {
-		fmt.Printf("failed to get queues: %v", err)
-	}
-
-	var queuesList []list.Item
 	queueRows := []table.Row{}
-	queuesMap := make(map[string]*manager.Queue)
-	for _, row := range queues {
+	for _, row := range dataStore.Queues {
 		maxBandwidth := row.MaxBandwidth
-		queuesList = append(queuesList, row)
 		downloadmanager.AddQueue(row)
-		queuesMap[strconv.Itoa(row.ID)] = row
-
 		queueRows = append(queueRows, table.Row{
 			strconv.Itoa(row.ID),
 			row.SaveDir,
@@ -674,25 +661,17 @@ func NewModel() *Model {
 		table.WithColumns(queueColumns), // Specify columns with WithColumns
 		table.WithRows(queueRows),       // Specify rows
 	)
-	queueSelect := list.New(queuesList, list.NewDefaultDelegate(), 0, 0)
 
-	var downloads []*manager.Download
-	if err := manager.GetAllDownloads(&downloads); err != nil {
-		fmt.Printf("failed to get downloads: %v", err)
-	}
 	downloadRows := []table.Row{}
-	downloadsMap := make(map[string]*manager.Download)
-	for _, row := range downloads {
+	for _, row := range dataStore.Downloads {
 		// row.QueueID = queuesMap[strconv.Itoa(row.QueueID)].ID
-		if row.Queue == nil {
-			manager.Delete(row)
+		if row.QueueID == 0 {
+			dataStore.RemoveDownload(row)
 			continue
 		}
-		row.Queue = queuesMap[strconv.Itoa(row.QueueID)]
-		// manager.Save(row)
+		row.Queue = dataStore.Queues[strconv.Itoa(row.QueueID)]
 
 		downloadmanager.AddDownload(row)
-		downloadsMap[strconv.Itoa(row.ID)] = row
 		downloadRows = append(downloadRows, table.Row{
 			strconv.Itoa(row.ID),
 			row.URL,
@@ -724,7 +703,6 @@ func NewModel() *Model {
 	return &Model{
 		currentTab:            tabDownloads,
 		inputURL:              ti,
-		queueSelect:           queueSelect,
 		outputFileName:        outputFileName,
 		selectedQueueRowIndex: 0,
 		focusedField:          0,
@@ -740,8 +718,7 @@ func NewModel() *Model {
 		activeStartTimeInput:  activeStartTimeInput,
 		activeEndTimeInput:    activeEndTimeInput,
 		focusedFieldForQueues: 0, // Focus on Save Directory initially
-		queues:                queuesMap,
-		downloads:             downloadsMap,
+		dataStore:             dataStore,
 		downloadmanager:       downloadmanager,
 	}
 }
@@ -750,7 +727,7 @@ func (m *Model) updateDownloadTable() {
 	var downloadRows []table.Row
 
 	for _, row := range m.downloadsTable.Rows() {
-		download := m.downloads[row[0]]
+		download := m.dataStore.Downloads[row[0]]
 		if download == nil || download.IsDeleted || download.Queue == nil {
 			continue
 		}
