@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+func (m *Model) showCreateQueueError() {
+	m.errorMessage = "You should create a queue before adding a download!"
+	m.confirmationMessage = ""
+	m.errorTime = time.Now()
+
+	m.resetFieldsForTab1()
+	m.focusedField = 0
+	m.inputURL.Focus()
+	m.outputFileName.Blur()
+}
+
 func (m *Model) showURLValidationError() {
 	m.errorMessage = "URL is required!"
 	m.confirmationMessage = ""

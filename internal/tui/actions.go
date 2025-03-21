@@ -29,6 +29,8 @@ func (m *Model) handleTabRight() {
 func (m *Model) handleNewDownloadSubmit() {
 	if m.inputURL.Value() == "" {
 		m.showURLValidationError()
+	} else if len(m.dataStore.Queues) == 0 {
+		m.showCreateQueueError()
 	} else {
 		// Create a new download with the data entered in fields
 		downloadURL := m.inputURL.Value()
