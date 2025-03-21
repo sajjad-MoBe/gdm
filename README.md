@@ -49,6 +49,8 @@ A terminal-based **Download Manager** built with **Golang**, designed to help us
    cd gdm
    go run cmd/main.go
 
+By running the program and navigating to the help tab, you can see how the program works at each step.
+
 
 ## Contributors
 
@@ -56,3 +58,7 @@ This project is maintained by:
 
 - **Sajjad Mohammadbeigi**  [GitHub Profile](https://github.com/sajjad-MoBe)
 - **Mohammad Mohammadbeigi** [GitHub Profile](https://github.com/mbmohammad)
+
+Sajjad implemented manager folder parts and Mohammad implemented TUI folder parts.
+At the end Sajjad connected these parts to each other.
+
