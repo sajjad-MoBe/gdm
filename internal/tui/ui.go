@@ -186,7 +186,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateFocusedFieldForTab1()
 			}
 			if m.currentTab == tabQueues {
-				m.focusedFieldForQueues = (m.focusedFieldForQueues + 1) % 5
+				m.focusedFieldForQueues = (m.focusedFieldForQueues + 1) % 6
 				m.updateFocusedFieldForTab3()
 			}
 		/*case " ":

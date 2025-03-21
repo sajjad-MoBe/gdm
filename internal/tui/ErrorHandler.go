@@ -1,6 +1,10 @@
 package tui
 
-import "time"
+import (
+	"os"
+	"path/filepath"
+	"time"
+)
 
 func (m *Model) showURLValidationError() {
 	m.errorMessage = "URL is required!"
@@ -159,6 +163,10 @@ func (m *Model) showEditQConfirmation() {
 func (m *Model) CheckErrorCodes() int {
 	var concurrentError, bwError, retriesError, timeError bool
 
+	if !m.validateDirectory(m.saveDirInput.Value()) {
+		return 1
+	}
+
 	if !regForConcurrent.MatchString(m.maxConcurrentInput.Value()) {
 		concurrentError = true
 	}
@@ -220,4 +228,44 @@ func (m *Model) CheckErrorCodes() int {
 		return 1
 	}
 	return 0
+}
+
+func (m *Model) validateDirectory(dir string) bool {
+
+	// Ensure the directory path is absolute.
+	if !filepath.IsAbs(dir) {
+		m.errorMessage = "Invalid directory path format!"
+		m.confirmationMessage = ""
+		m.setupsAfterErrorForQueues()
+		return false
+	}
+
+	// Check if the path exists and is a directory.
+	info, err := os.Stat(dir)
+	if err != nil {
+		m.errorMessage = "Directory does not exist!"
+		m.confirmationMessage = ""
+		m.setupsAfterErrorForQueues()
+		return false
+	}
+	if !info.IsDir() {
+		m.errorMessage = "The provided path is not a directory!"
+		m.confirmationMessage = ""
+		m.setupsAfterErrorForQueues()
+		return false
+	}
+
+	// Test write access by attempting to create a temporary file in the directory.
+	tempFile, err := os.CreateTemp(dir, "perm_test")
+	if err != nil {
+		m.errorMessage = "No write access in the directory!"
+		m.confirmationMessage = ""
+		m.setupsAfterErrorForQueues()
+		return false
+	}
+	// Close and remove the temporary file.
+	tempFile.Close()
+	os.Remove(tempFile.Name())
+
+	return true
 }
