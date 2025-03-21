@@ -398,6 +398,11 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 			if columns[colIndex].Title == "SaveDir" && len(cell) > 40 {
 				cell = cell[:40] + "..."
 			}
+			if columns[colIndex].Title == "Max Bandwidth" {
+				if cell == "0" {
+					cell = "Unlimited"
+				}
+			}
 			// Alternate between lemon yellow (odd) and sky blue (even)
 			bgColor := "#87CEEB" // Sky blue for even columns
 			if colIndex%2 == 0 {
