@@ -174,7 +174,7 @@ func (m *Model) showEditQConfirmation() {
 func (m *Model) CheckErrorCodes() int {
 	var concurrentError, bwError, retriesError, timeError bool
 
-	if !m.validateDirectory(m.saveDirInput.Value()) {
+	if !m.validateDirectory() {
 		return 1
 	}
 
@@ -241,8 +241,25 @@ func (m *Model) CheckErrorCodes() int {
 	return 0
 }
 
-func (m *Model) validateDirectory(dir string) bool {
+func (m *Model) validateDirectory() bool {
+	dir := m.saveDirInput.Value()
 
+	if dir == "." || (len(dir) > 1 && dir[:2] == "./") {
+		currentDir, err := os.Getwd()
+		if err != nil {
+			m.errorMessage = "Couldn't get current directory, please don't start saveDir with './'"
+			m.confirmationMessage = ""
+			m.setupsAfterErrorForQueues()
+			return false
+		}
+		if len(dir) == 1 {
+			dir = currentDir
+		} else {
+			dir = filepath.Join(currentDir, dir[2:])
+		}
+		m.saveDirInput.SetValue(dir)
+
+	}
 	// Ensure the directory path is absolute.
 	if !filepath.IsAbs(dir) {
 		m.errorMessage = "Invalid directory path format!"
