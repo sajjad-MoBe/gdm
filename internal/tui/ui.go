@@ -23,40 +23,25 @@ var regForHHMMFormat = regexp.MustCompile(`^(?:[01]?[0-9]|2[0-3]):([0-5]?[0-9])$
 
 // Define your table columns for the Downloads tab
 var downloadColumns = []table.Column{
-	{Title: "Download ID", Width: 10},
+	{Title: "Download ID", Width: 13},
 	{Title: "Queue ID", Width: 10},
-	{Title: "URL", Width: 60},
+	{Title: "URL", Width: 50},
 	{Title: "Status", Width: 10},
 	{Title: "Progress", Width: 10},
 	{Title: "Speed", Width: 10},
 	{Title: "Retries", Width: 10},
 }
 
-// Sample rows for the Downloads table
-// var downloadRows = []table.Row{
-// 	{"1", "https://example.com/file1.zip", "Downloading", "50%", "1.2 MB/s"},
-// 	{"2", "https://example.com/file2.zip", "Completed", "100%", "N/A"},
-// 	{"3", "https://example.com/file3.zip", "Paused", "20%", "800 KB/s"},
-// 	{"4", "https://example.com/file4.zip", "Failed", "N/A", "N/A"},
-// }
-
 // Define your table columns for the Queues tab
 var queueColumns = []table.Column{
 	{Title: "Queue ID", Width: 10},
-	{Title: "SaveDir", Width: 60},
-	{Title: "Max Concurrent", Width: 10},
-	{Title: "Max Bandwidth", Width: 10},
-	{Title: "Max Retries", Width: 10},
-	{Title: "Active Start Time", Width: 20},
-	{Title: "Active End Time", Width: 20},
+	{Title: "SaveDir", Width: 50},
+	{Title: "Max Concurrent", Width: 16},
+	{Title: "Max Bandwidth", Width: 15},
+	{Title: "Max Retries", Width: 13},
+	{Title: "Active Start Time", Width: 19},
+	{Title: "Active End Time", Width: 19},
 }
-
-// Sample rows for the Queues table
-// var queueRows = []table.Row{
-// 	{"1", "/path/to/dir1", "5", "100 MB/s", "08:00 AM", "06:00 PM"},
-// 	{"2", "/path/to/dir2", "3", "50 MB/s", "09:00 AM", "05:00 PM"},
-// 	{"3", "/path/to/dir3", "2", "30 MB/s", "10:00 AM", "04:00 PM"},
-// }
 
 // Tabs constants
 const (
@@ -64,6 +49,11 @@ const (
 	tabDownloads
 	tabQueues
 	tabHelp // New help page tab
+)
+
+const (
+	minWidth  = 160
+	minHeight = 41
 )
 
 // Model for the table content in Downloads tab
@@ -96,6 +86,7 @@ type Model struct {
 	maxQueueID            int
 	maxDownloadID         int
 	downloadmanager       *manager.DownloadManager
+	width, height         int
 }
 
 // Define styles using LipGloss
@@ -126,12 +117,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
 	case updateDownloadMsg:
 		if m.currentTab == tabDownloads {
 			m.updateDownloadTable()
 		}
 		return m, tickToUpdateDownloadTable()
 	case tea.KeyMsg:
+		if m.width < minWidth || m.height < minHeight {
+			if msg.String() != "*" {
+				// Ignore any key other than "*" until the window is resized.
+				return m, nil
+			} else if msg.String() == "*" {
+				m.dataStore.Save()
+				return m, tea.Quit
+			}
+		}
 		switch msg.String() {
 		case "*":
 			m.dataStore.Save()
@@ -228,8 +233,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() string {
+	//tempVariable := m.currentTab
+	if m.width < minWidth || m.height < minHeight {
+		//m.currentTab = -1
+		return fmt.Sprintf(
+			"Your window is too small: current size %dx%d.\nPlease resize your window to at least %dx%d(width x height)."+
+				"\nOr quit the  application by pressing * ",
+			m.width, m.height, minWidth, minHeight,
+		)
+	} //else if  {
+
+	//}
+
 	var renderedTabs []string
-	// Loop from tabAddDownload to tabHelp (including the new Help tab)
 	for i := tabAddDownload; i <= tabHelp; i++ {
 		var style lipgloss.Style
 		if i == m.currentTab {
@@ -267,7 +283,24 @@ func (m *Model) View() string {
 		content = m.renderHelpPage(tabsRow)
 	}
 
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(content)
+	// Compute margins as 5% of the terminal dimensions
+	marginWidth := int(float64(m.width) * 0.05)
+	marginHeight := int(float64(m.height) * 0.05)
+
+	// Calculate the area available for the TUI content
+	contentWidth := m.width - 2*marginWidth
+	contentHeight := m.height - 2*marginHeight
+
+	// Place the content in the computed area, aligning to top-left
+	placedContent := lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, content)
+
+	// Wrap the placed content with a border
+	borderedContent := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(placedContent)
+
+	// Pad the bordered content with the computed margins so it appears 5% from the edges
+	finalView := lipgloss.NewStyle().Padding(marginHeight, marginWidth).Render(borderedContent)
+
+	return finalView
 }
 
 func (m *Model) renderHelpPage(tabsRow string) string {
@@ -351,7 +384,7 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 			Bold(true).
 			Background(lipgloss.Color(bgColor)).
 			Foreground(lipgloss.Color("0")).
-			Padding(0, 2)
+			Padding(0, 1)
 		headerRow += headerCellStyle.Render(fmt.Sprintf("%-*s", column.Width, column.Title))
 	}
 
@@ -362,6 +395,9 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 	for rowIndex, row := range m.queuesTable.Rows() {
 		rowStr := ""
 		for colIndex, cell := range row {
+			if columns[colIndex].Title == "SaveDir" && len(cell) > 40 {
+				cell = cell[:40] + "..."
+			}
 			// Alternate between lemon yellow (odd) and sky blue (even)
 			bgColor := "#87CEEB" // Sky blue for even columns
 			if colIndex%2 == 0 {
@@ -371,7 +407,7 @@ func (m *Model) renderQueuesTab(tabsRow string) string {
 			cellStyle := lipgloss.NewStyle().
 				Background(lipgloss.Color(bgColor)).
 				Foreground(lipgloss.Color("0")).
-				Padding(0, 2)
+				Padding(0, 1)
 
 			// If the row is selected, override with a distinct style.
 			if rowIndex == m.selectedRow {
@@ -496,7 +532,7 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 			Bold(true).
 			Background(lipgloss.Color(bgColor)).
 			Foreground(lipgloss.Color("0")).
-			Padding(0, 2)
+			Padding(0, 1)
 		headerRow += headerCellStyle.Render(fmt.Sprintf("%-*s", column.Width, column.Title))
 	}
 
@@ -507,6 +543,9 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 	for rowIndex, row := range m.downloadsTable.Rows() {
 		rowStr := ""
 		for colIndex, cell := range row {
+			if columns[colIndex].Title == "URL" && len(cell) > 40 {
+				cell = cell[:40] + "..."
+			}
 			// Alternate between lemon yellow (odd) and sky blue (even)
 			bgColor := "#87CEEB" // Sky blue for even columns
 			if colIndex%2 == 0 {
@@ -516,7 +555,7 @@ func (m *Model) renderDownloadListTab(tabsRow string) string {
 			cellStyle := lipgloss.NewStyle().
 				Background(lipgloss.Color(bgColor)).
 				Foreground(lipgloss.Color("0")).
-				Padding(0, 2)
+				Padding(0, 1)
 
 			// If the row is selected, override with a distinct style.
 			if rowIndex == m.selectedRow {

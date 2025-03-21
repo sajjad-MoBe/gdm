@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -284,10 +283,6 @@ func (m *Model) handleNewOrEditQueueFormSubmit() {
 		if errorCode == 1 {
 			m.handleCancel()
 			return
-		}
-		for x := 0; x < 5; x++ {
-
-			fmt.Println(m.maxConcurrentInput.Value(), m.maxBandwidthInput.Value(), m.maxRetriesPerDLInput.Value())
 		}
 		MaxConcurrentDownloads, err := strconv.Atoi(m.maxConcurrentInput.Value())
 		if err != nil {
